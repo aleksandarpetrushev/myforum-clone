@@ -121,6 +121,31 @@ end
   event.update!(reserved_spots: attendees.length)
 end
 
+3.times do |index|
+  organizer = organizations[index]
+  viewers = [
+    organizations[(index + 2) % organizations.length],
+    organizations[(index + 5) % organizations.length]
+  ]
+  start_time = (120 + index).days.from_now.change(hour: 11)
+  restricted = Event.create!(
+    organization: organizer,
+    title: "Members session #{index + 1}: #{topics[index].name}",
+    description: "A session shared with invited organizations. The organizing organization is not automatically a viewer.",
+    starts_at: start_time,
+    ends_at: start_time + 2.hours,
+    location: CITIES[index % CITIES.length],
+    kind: "in_person",
+    capacity: 40,
+    reserved_spots: 0,
+    status: "published",
+    visibility: "organization_restricted"
+  )
+  viewers.each { |organization| restricted.allowed_organizations << organization }
+  restricted.topics << topics[index]
+  restricted.speakers << speakers[index]
+end
+
 Event.find_each do |event|
   OutboxEvent.record!(
     event_type: "EventUpdated",

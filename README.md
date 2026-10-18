@@ -74,7 +74,7 @@ The seed creates 8 organizations, 15 topics, 100 events, speakers, follows, and 
 
 - `POST /api/session` with `email` and `password` returns a JWT
 - Send `Authorization: Bearer <token>` on later requests
-- `GET /api/events` supports `q`, `topic_id`, `location`, `upcoming`, and `page`
+- `GET /api/events` supports `q`, `topic_id`, `location`, `upcoming`, and `page`. Results include public events and organization-restricted events the caller may see.
 - `GET /api/events/:id`
 - `POST /api/events/:id/register`
 - `PATCH /api/events/:id` for an organizer admin

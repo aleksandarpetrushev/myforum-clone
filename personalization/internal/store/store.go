@@ -6,14 +6,22 @@ import (
 )
 
 type Event struct {
-	ID            int64
-	Title         string
-	Location      string
-	StartsAt      time.Time
-	Status        string
-	ReservedSpots int
-	Capacity      int
-	TopicIDs      []int64
+	ID                     int64
+	Title                  string
+	Location               string
+	StartsAt               time.Time
+	Status                 string
+	ReservedSpots          int
+	Capacity               int
+	TopicIDs               []int64
+	Visibility             string
+	OrganizerID            int64
+	AllowedOrganizationIDs []int64
+}
+
+type Membership struct {
+	OrganizationID int64
+	Role           string
 }
 
 type Profile struct {

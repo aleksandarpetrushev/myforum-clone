@@ -7,21 +7,23 @@ import (
 )
 
 type Memory struct {
-	mu        sync.Mutex
-	events    map[int64]Event
-	topics    map[int64]map[int64]struct{}
-	userTopic map[int64]map[int64]struct{}
-	location  map[int64]string
-	seen      map[string]struct{}
+	mu          sync.Mutex
+	events      map[int64]Event
+	topics      map[int64]map[int64]struct{}
+	userTopic   map[int64]map[int64]struct{}
+	location    map[int64]string
+	memberships map[int64][]Membership
+	seen        map[string]struct{}
 }
 
 func NewMemory() *Memory {
 	return &Memory{
-		events:    map[int64]Event{},
-		topics:    map[int64]map[int64]struct{}{},
-		userTopic: map[int64]map[int64]struct{}{},
-		location:  map[int64]string{},
-		seen:      map[string]struct{}{},
+		events:      map[int64]Event{},
+		topics:      map[int64]map[int64]struct{}{},
+		userTopic:   map[int64]map[int64]struct{}{},
+		location:    map[int64]string{},
+		memberships: map[int64][]Membership{},
+		seen:        map[string]struct{}{},
 	}
 }
 
@@ -81,6 +83,12 @@ func (m *Memory) Apply(_ context.Context, incoming Incoming) error {
 	return nil
 }
 
+func (m *Memory) SetMemberships(userID int64, memberships []Membership) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.memberships[userID] = append([]Membership(nil), memberships...)
+}
+
 func (m *Memory) Candidates(_ context.Context, userID int64, now time.Time) ([]Event, Profile, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -96,6 +104,9 @@ func (m *Memory) Candidates(_ context.Context, userID int64, now time.Time) ([]E
 			continue
 		}
 		event.TopicIDs = keys(m.topics[event.ID])
+		if !CanSee(event, m.memberships[userID]) {
+			continue
+		}
 		events = append(events, event)
 	}
 	return events, profile, nil
@@ -104,15 +115,23 @@ func (m *Memory) Candidates(_ context.Context, userID int64, now time.Time) ([]E
 func eventFromSnapshot(snapshot map[string]any) Event {
 	id, _ := int64From(snapshot["id"])
 	startsAt, _ := time.Parse(time.RFC3339, stringFrom(snapshot["starts_at"]))
+	visibility := stringFrom(snapshot["visibility"])
+	if visibility == "" {
+		visibility = "public"
+	}
+	organizerID, _ := int64From(snapshot["organization_id"])
 	return Event{
-		ID:            id,
-		Title:         stringFrom(snapshot["title"]),
-		Location:      stringFrom(snapshot["location"]),
-		StartsAt:      startsAt,
-		Status:        stringFrom(snapshot["status"]),
-		ReservedSpots: intFrom(snapshot["reserved_spots"]),
-		Capacity:      intFrom(snapshot["capacity"]),
-		TopicIDs:      int64Slice(snapshot["topic_ids"]),
+		ID:                     id,
+		Title:                  stringFrom(snapshot["title"]),
+		Location:               stringFrom(snapshot["location"]),
+		StartsAt:               startsAt,
+		Status:                 stringFrom(snapshot["status"]),
+		ReservedSpots:          intFrom(snapshot["reserved_spots"]),
+		Capacity:               intFrom(snapshot["capacity"]),
+		TopicIDs:               int64Slice(snapshot["topic_ids"]),
+		Visibility:             visibility,
+		OrganizerID:            organizerID,
+		AllowedOrganizationIDs: int64Slice(snapshot["allowed_organization_ids"]),
 	}
 }
 

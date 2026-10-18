@@ -7,7 +7,11 @@ class EventPolicy
   end
 
   def show?
-    user.present?
+    return false unless user
+    return true if public_event?
+    return true if admin_of_organizer?
+
+    member_of_allowed_organization?
   end
 
   def update?
@@ -27,7 +31,27 @@ class EventPolicy
     def resolve
       return scope.none unless user
 
-      scope.all
+      scope.where(<<~SQL.squish, user.id, user.id)
+        events.visibility = 'public'
+        OR (
+          events.visibility = 'organization_restricted'
+          AND EXISTS (
+            SELECT 1
+            FROM event_allowed_organizations eao
+            INNER JOIN organization_memberships om
+              ON om.organization_id = eao.organization_id
+             AND om.user_id = ?
+            WHERE eao.event_id = events.id
+          )
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM organization_memberships om
+          WHERE om.user_id = ?
+            AND om.organization_id = events.organization_id
+            AND om.role = 'admin'
+        )
+      SQL
     end
 
     private
@@ -36,6 +60,19 @@ class EventPolicy
   end
 
   private
+
+  def public_event?
+    event.visibility.blank? || event.visibility == "public"
+  end
+
+  def member_of_allowed_organization?
+    return false unless event.visibility == "organization_restricted"
+
+    OrganizationMembership
+      .where(user_id: user.id)
+      .where(organization_id: event.event_allowed_organizations.select(:organization_id))
+      .exists?
+  end
 
   def admin_of_organizer?
     return false unless user && event.respond_to?(:organization_id)

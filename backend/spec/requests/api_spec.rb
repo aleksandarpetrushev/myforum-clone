@@ -85,4 +85,97 @@ RSpec.describe "API", type: :request do
     expect(response).to have_http_status(:ok)
     expect(json_body["token"]).to be_present
   end
+
+  describe "organization-restricted events" do
+    let(:partner) { Organization.create!(name: "Partner", slug: "partner") }
+    let(:second) { Organization.create!(name: "Second", slug: "second") }
+    let(:member) { User.create!(email: "member@example.com", name: "Member", password: "password") }
+    let(:restricted) do
+      created = Event.create!(
+        organization: organization,
+        title: "Private clinic",
+        description: "Invite only",
+        starts_at: 6.days.from_now,
+        ends_at: 6.days.from_now + 1.hour,
+        location: "Berlin",
+        kind: "in_person",
+        capacity: 5,
+        status: "published",
+        visibility: "organization_restricted"
+      )
+      created.allowed_organizations << partner
+      created.allowed_organizations << second
+      created
+    end
+
+    it "omits restricted events from search and returns 404 for a direct request" do
+      restricted
+      get "/api/events", params: { q: "Private" }, headers: auth_headers(user)
+      expect(json_body["data"].map { |row| row["id"] }).not_to include(restricted.id)
+
+      expect(Events::Cache).not_to receive(:fetch_detail)
+      get "/api/events/#{restricted.id}", headers: auth_headers(user)
+      expect(response).to have_http_status(:not_found)
+      expect(response.body).not_to include("Private clinic")
+
+      post "/api/events/#{restricted.id}/register", headers: auth_headers(user)
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "lets a member of one allowed organization discover, view, and register" do
+      OrganizationMembership.create!(user: member, organization: second, role: "member")
+      restricted
+
+      get "/api/events", params: { q: "Private" }, headers: auth_headers(member)
+      expect(json_body["data"].map { |row| row["id"] }).to include(restricted.id)
+
+      get "/api/events/#{restricted.id}", headers: auth_headers(member)
+      expect(response).to have_http_status(:ok)
+      expect(json_body["visibility"]).to eq("organization_restricted")
+
+      post "/api/events/#{restricted.id}/register", headers: auth_headers(member)
+      expect(response).to have_http_status(:created)
+    end
+
+    it "drops access immediately when the last permitted membership is removed" do
+      first = OrganizationMembership.create!(user: member, organization: partner, role: "member")
+      second_membership = OrganizationMembership.create!(user: member, organization: second, role: "member")
+      Registration.create!(user: member, event: restricted, status: "confirmed")
+
+      first.destroy!
+      get "/api/events/#{restricted.id}", headers: auth_headers(member)
+      expect(response).to have_http_status(:ok)
+
+      second_membership.destroy!
+      get "/api/events/#{restricted.id}", headers: auth_headers(member)
+      expect(response).to have_http_status(:not_found)
+
+      get "/api/me/registrations", headers: auth_headers(member)
+      expect(json_body["data"]).to eq([])
+    end
+
+    it "hides an event after it becomes organization restricted" do
+      get "/api/events/#{event.id}", headers: auth_headers(user)
+      expect(response).to have_http_status(:ok)
+
+      patch "/api/events/#{event.id}",
+            params: { event: { visibility: "organization_restricted", allowed_organization_ids: [partner.id] } },
+            headers: auth_headers(admin)
+      expect(response).to have_http_status(:ok)
+      expect(event.reload.visibility).to eq("organization_restricted")
+      expect(event.allowed_organization_ids).to eq([partner.id])
+
+      get "/api/events/#{event.id}", headers: auth_headers(user)
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "lets the organizer admin open a restricted event that does not list their organization" do
+      get "/api/events/#{restricted.id}", headers: auth_headers(admin)
+      expect(response).to have_http_status(:ok)
+
+      patch "/api/events/#{restricted.id}", params: { event: { title: "Admin title" } }, headers: auth_headers(admin)
+      expect(response).to have_http_status(:ok)
+      expect(restricted.reload.title).to eq("Admin title")
+    end
+  end
 end

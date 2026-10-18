@@ -44,9 +44,7 @@ module Api
 
     def list_payload
       if cacheable_list?
-        Rails.cache.fetch(Events::Cache::UPCOMING_KEY, expires_in: Events::Cache::UPCOMING_TTL) do
-          serialize(filtered_events)
-        end
+        Events::Cache.fetch_upcoming_list(current_user) { serialize(filtered_events) }
       else
         serialize(filtered_events)
       end
@@ -86,7 +84,7 @@ module Api
     end
 
     def event_params
-      params.require(:event).permit(:title, :description, :starts_at, :ends_at, :location, :kind, :capacity, :status)
+      params.require(:event).permit(:title, :description, :starts_at, :ends_at, :location, :kind, :capacity, :status, :visibility, allowed_organization_ids: [])
     end
   end
 end

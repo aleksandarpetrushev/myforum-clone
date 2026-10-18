@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_18_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_18_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -22,6 +22,16 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_18_000000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["outbox_event_id"], name: "index_analytics_events_on_outbox_event_id", unique: true
+  end
+
+  create_table "event_allowed_organizations", force: :cascade do |t|
+    t.bigint "event_id", null: false
+    t.bigint "organization_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["event_id", "organization_id"], name: "index_event_allowed_organizations_on_event_and_org", unique: true
+    t.index ["event_id"], name: "index_event_allowed_organizations_on_event_id"
+    t.index ["organization_id"], name: "index_event_allowed_organizations_on_organization_id"
   end
 
   create_table "event_speakers", force: :cascade do |t|
@@ -57,6 +67,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_18_000000) do
     t.string "status", default: "published", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "visibility", default: "public", null: false
     t.index ["location"], name: "index_events_on_location"
     t.index ["organization_id"], name: "index_events_on_organization_id"
     t.index ["starts_at"], name: "index_events_on_starts_at"
@@ -66,6 +77,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_18_000000) do
     t.check_constraint "kind::text = ANY (ARRAY['online'::character varying, 'in_person'::character varying]::text[])", name: "events_kind_valid"
     t.check_constraint "reserved_spots >= 0 AND reserved_spots <= capacity", name: "events_reserved_within_capacity"
     t.check_constraint "status::text = ANY (ARRAY['draft'::character varying, 'published'::character varying, 'cancelled'::character varying]::text[])", name: "events_status_valid"
+    t.check_constraint "visibility::text = ANY (ARRAY['public'::character varying, 'organization_restricted'::character varying]::text[])", name: "events_visibility_valid"
   end
 
   create_table "notifications", force: :cascade do |t|
@@ -166,6 +178,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_18_000000) do
   end
 
   add_foreign_key "analytics_events", "outbox_events"
+  add_foreign_key "event_allowed_organizations", "events"
+  add_foreign_key "event_allowed_organizations", "organizations"
   add_foreign_key "event_speakers", "events"
   add_foreign_key "event_speakers", "speakers"
   add_foreign_key "event_topics", "events"
