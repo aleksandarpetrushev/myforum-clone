@@ -1,0 +1,33 @@
+<h1>Upcoming events</h1>
+<form [formGroup]="form">
+  <label>
+    Search
+    <input formControlName="q" placeholder="Title or description" />
+  </label>
+  <label>
+    Topic
+    <select formControlName="topicId">
+      <option value="">Any</option>
+      @for (topic of topics(); track topic.id) {
+        <option [value]="topic.id">{{ topic.name }}</option>
+      }
+    </select>
+  </label>
+  <label>
+    Location
+    <input formControlName="location" placeholder="Berlin" />
+  </label>
+</form>
+
+@if (loading()) {
+  <p>Loading events…</p>
+}
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+@for (event of events(); track event.id) {
+  <article class="card">
+    <h2><a [routerLink]="['/events', event.id]">{{ event.title }}</a></h2>
+    <p class="muted">{{ event.starts_at }} · {{ event.location }} · {{ event.reserved_spots }}/{{ event.capacity }}</p>
+  </article>
+}

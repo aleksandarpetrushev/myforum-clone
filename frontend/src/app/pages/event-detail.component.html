@@ -1,0 +1,22 @@
+<p><a routerLink="/events">Back to events</a></p>
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+@if (event(); as current) {
+  <h1>{{ current.title }}</h1>
+  <p class="muted">{{ current.starts_at }} · {{ current.location }} · {{ current.kind }}</p>
+  <p>{{ current.description }}</p>
+  <p>{{ current.reserved_spots }} of {{ current.capacity }} spots reserved</p>
+  <p>{{ current.organization.name }}</p>
+  @if (current.speakers?.length) {
+    <ul>
+      @for (speaker of current.speakers; track speaker.id) {
+        <li>{{ speaker.name }}<span class="muted"> {{ speaker.title }}</span></li>
+      }
+    </ul>
+  }
+  <button type="button" (click)="register()">Register</button>
+}
+@if (message()) {
+  <p>{{ message() }}</p>
+}

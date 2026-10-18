@@ -1,0 +1,16 @@
+<h1>Log in</h1>
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <label>
+    Email
+    <input type="email" formControlName="email" />
+  </label>
+  <label>
+    Password
+    <input type="password" formControlName="password" />
+  </label>
+  <button type="submit">Continue</button>
+</form>
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+<p class="muted">Seeded account: alex&#64;example.com / password</p>

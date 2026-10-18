@@ -1,0 +1,10 @@
+<h1>Topics</h1>
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+@for (topic of topics(); track topic.id) {
+  <article class="card">
+    <h2>{{ topic.name }}</h2>
+    <button type="button" (click)="toggle(topic)">{{ topic.followed ? 'Unfollow' : 'Follow' }}</button>
+  </article>
+}

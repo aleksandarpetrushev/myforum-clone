@@ -1,0 +1,10 @@
+<h1>Notifications</h1>
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+@for (notification of notifications(); track notification.id) {
+  <article class="card">
+    <h2>{{ notification.title }}</h2>
+    <p>{{ notification.body }}</p>
+  </article>
+}

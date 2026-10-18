@@ -1,0 +1,10 @@
+<h1>My registrations</h1>
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+@for (registration of registrations(); track registration.id) {
+  <article class="card">
+    <h2><a [routerLink]="['/events', registration.event.id]">{{ registration.event.title }}</a></h2>
+    <p class="muted">{{ registration.status }} · {{ registration.event.starts_at }} · {{ registration.event.location }}</p>
+  </article>
+}
