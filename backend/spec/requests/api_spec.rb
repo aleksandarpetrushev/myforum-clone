@@ -155,6 +155,47 @@ RSpec.describe "API", type: :request do
       expect(response).to have_http_status(:created)
     end
 
+    it "authorizes registration history with one event scope query" do
+      OrganizationMembership.create!(user: member, organization: partner, role: "member")
+      visible = restricted
+      hidden = Array.new(3) do |index|
+        Event.create!(
+          organization: organization,
+          title: "Hidden session #{index}",
+          description: "Invite only",
+          starts_at: (7 + index).days.from_now,
+          ends_at: (7 + index).days.from_now + 1.hour,
+          location: "Berlin",
+          kind: "in_person",
+          capacity: 5,
+          status: "published",
+          visibility: "organization_restricted"
+        )
+      end
+      ([visible] + hidden).each do |created|
+        Registration.create!(user: member, event: created, status: "confirmed")
+      end
+
+      queries = []
+      subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+        sql = payload[:sql]
+        next if payload[:name] == "SCHEMA" || sql.match?(/\A(?:BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)/)
+
+        queries << sql
+      end
+      get "/api/me/registrations", headers: auth_headers(member)
+      ActiveSupport::Notifications.unsubscribe(subscriber)
+
+      expect(queries.count { |sql| sql.include?("organization_memberships") }).to eq(1)
+      rows = json_body["data"].index_by { |row| row["event_id"] }
+      expect(rows[visible.id]).to have_key("event")
+      expect(rows[visible.id]["event"]["title"]).to eq(visible.title)
+      hidden.each do |created|
+        expect(rows[created.id]).not_to have_key("event")
+        expect(response.body).not_to include(created.title)
+      end
+    end
+
     it "drops access immediately when the last permitted membership is removed" do
       first = OrganizationMembership.create!(user: member, organization: partner, role: "member")
       second_membership = OrganizationMembership.create!(user: member, organization: second, role: "member")
