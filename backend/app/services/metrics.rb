@@ -5,6 +5,9 @@ class Metrics
     http_request_duration_ms_sum
     registration_success_total
     registration_failure_total
+    registration_cancel_success_total
+    registration_cancel_failure_total
+    registration_cancel_invariant_violation_total
   ].freeze
 
   LOCK = Mutex.new

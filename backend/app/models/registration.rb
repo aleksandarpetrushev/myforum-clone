@@ -22,19 +22,24 @@ class Registration < ApplicationRecord
     end
   end
 
-  def as_json_api
-    {
+  def as_json_api(event_visible: true)
+    payload = {
       "id" => id,
       "status" => status,
       "event_id" => event_id,
       "user_id" => user_id,
-      "created_at" => created_at,
-      "event" => event && {
-        "id" => event.id,
-        "title" => event.title,
-        "starts_at" => event.starts_at,
-        "location" => event.location
-      }
+      "created_at" => created_at
+    }
+    payload["event"] = event_summary if event_visible && event
+    payload
+  end
+
+  def event_summary
+    {
+      "id" => event.id,
+      "title" => event.title,
+      "starts_at" => event.starts_at,
+      "location" => event.location
     }
   end
 end

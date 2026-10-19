@@ -67,13 +67,6 @@ describe('RegistrationsComponent hidden events', () => {
     id: 9,
     status: 'confirmed',
     event_id: 6,
-    event: {
-      id: 6,
-      title: 'Private clinic',
-      starts_at: '2026-10-23T09:00:00.000Z',
-      location: 'Berlin',
-      viewable: false,
-    },
   };
 
   beforeEach(async () => {
@@ -93,10 +86,12 @@ describe('RegistrationsComponent hidden events', () => {
 
   it('cancels a registration whose event is no longer viewable', () => {
     expect(fixture.nativeElement.querySelector('a')).toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('Private clinic');
+    expect(fixture.nativeElement.textContent).toContain('Registration');
+    expect(fixture.nativeElement.textContent).not.toContain('Private clinic');
 
     clickButton('Cancel registration');
     fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Cancel this registration?');
     clickButton('Confirm cancel');
 
     const request = http.expectOne('http://localhost:3000/api/registrations/cancel');

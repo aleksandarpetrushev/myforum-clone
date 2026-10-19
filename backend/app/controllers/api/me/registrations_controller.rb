@@ -9,9 +9,7 @@ module Api
       private
 
       def json_for(registration)
-        payload = registration.as_json_api
-        payload["event"]["viewable"] = EventPolicy.new(current_user, registration.event).show? if payload["event"]
-        payload
+        registration.as_json_api(event_visible: EventPolicy.new(current_user, registration.event).show?)
       end
     end
   end

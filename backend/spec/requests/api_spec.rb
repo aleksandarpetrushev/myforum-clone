@@ -55,6 +55,17 @@ RSpec.describe "API", type: :request do
     expect(json_body.dig("error", "code")).to eq("duplicate_registration")
   end
 
+  it "rejects cancellation once the event has started" do
+    post "/api/registrations", params: { event_id: event.id }, headers: auth_headers(user)
+    event.update!(starts_at: 1.hour.ago, ends_at: 1.hour.from_now)
+
+    post "/api/registrations/cancel", params: { event_id: event.id }, headers: auth_headers(user)
+
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(json_body.dig("error", "code")).to eq("event_started")
+    expect(event.reload.reserved_spots).to eq(1)
+  end
+
   it "returns event_full when capacity is exhausted" do
     event.update!(capacity: 1, reserved_spots: 1)
     post "/api/registrations", params: { event_id: event.id }, headers: auth_headers(user)
@@ -160,11 +171,17 @@ RSpec.describe "API", type: :request do
 
       get "/api/me/registrations", headers: auth_headers(member)
       expect(json_body["data"].map { |row| row["event_id"] }).to eq([restricted.id])
-      expect(json_body.dig("data", 0, "event", "viewable")).to be(false)
+      expect(json_body.dig("data", 0, "status")).to eq("confirmed")
+      expect(json_body.dig("data", 0)).not_to have_key("event")
+      expect(response.body).not_to include(restricted.title)
+      expect(response.body).not_to include(restricted.location)
 
       post "/api/registrations/cancel", params: { event_id: restricted.id }, headers: auth_headers(member)
       expect(response).to have_http_status(:ok)
       expect(json_body["status"]).to eq("cancelled")
+      expect(json_body).not_to have_key("event")
+      expect(response.body).not_to include(restricted.title)
+      expect(response.body).not_to include(restricted.location)
       expect(restricted.reload.reserved_spots).to eq(0)
 
       get "/api/events/#{restricted.id}", headers: auth_headers(member)

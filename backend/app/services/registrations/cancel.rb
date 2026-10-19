@@ -2,6 +2,8 @@ module Registrations
   class Cancel
     class UserNotRegistered < StandardError; end
     class InvalidState < StandardError; end
+    class EventStarted < StandardError; end
+    class InvariantViolation < StandardError; end
 
     def initialize(user:, event:)
       @user = user
@@ -17,9 +19,12 @@ module Registrations
         raise UserNotRegistered unless registration
 
         if registration.can_cancel?
+          raise EventStarted if event.starts_at <= Time.current
+          ensure_reserved_spot!(event, registration)
+
           registration.lifecycle_version += 1
           registration.cancel!
-          event.update!(reserved_spots: [event.reserved_spots - 1, 0].max)
+          event.update!(reserved_spots: event.reserved_spots - 1)
           OutboxEvent.record!(
             event_type: "RegistrationCancelled",
             aggregate_type: "Registration",
@@ -39,6 +44,21 @@ module Registrations
       end
 
       registration
+    end
+
+    private
+
+    def ensure_reserved_spot!(event, registration)
+      return if event.reserved_spots >= 1
+
+      Rails.logger.error({
+        event: "registration.cancel.invariant_violation",
+        event_id: event.id,
+        registration_id: registration.id,
+        reserved_spots: event.reserved_spots
+      }.to_json)
+      Metrics.increment("registration_cancel_invariant_violation_total")
+      raise InvariantViolation, "confirmed registration #{registration.id} has no reserved spot on event #{event.id}"
     end
   end
 end

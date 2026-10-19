@@ -8,17 +8,26 @@
 @for (registration of registrations(); track registration.id) {
   <article class="card">
     <h2>
-      @if (registration.event.viewable === false) {
-        {{ registration.event.title }}
-      } @else {
+      @if (registration.event) {
         <a [routerLink]="['/events', registration.event.id]">{{ registration.event.title }}</a>
+      } @else {
+        Registration
       }
     </h2>
-    <p class="muted">{{ registration.status }} · {{ registration.event.starts_at }} · {{ registration.event.location }}</p>
+    <p class="muted">
+      {{ registration.status }}
+      @if (registration.event) {
+        · {{ registration.event.starts_at }} · {{ registration.event.location }}
+      }
+    </p>
     @if (cancellingId() === registration.id) {
       <p>Cancelling…</p>
     } @else if (confirmingId() === registration.id) {
-      <p>Cancel your registration for {{ registration.event.title }}?</p>
+      @if (registration.event) {
+        <p>Cancel your registration for {{ registration.event.title }}?</p>
+      } @else {
+        <p>Cancel this registration?</p>
+      }
       <button type="button" (click)="confirmCancel(registration)" [disabled]="cancellingId() !== null">Confirm cancel</button>
       <button type="button" class="secondary" (click)="dismissConfirm()" [disabled]="cancellingId() !== null">Keep registration</button>
     } @else if (registration.status === 'confirmed') {
