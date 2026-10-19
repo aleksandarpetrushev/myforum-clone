@@ -28,4 +28,15 @@ RSpec.describe "Outbox::Publisher" do
     expect(Notification.where(user: user, kind: "registration_confirmed").count).to eq(1)
     expect(AnalyticsEvent.count).to eq(1)
   end
+
+  it "creates a cancellation notification from the outbox event type" do
+    Events::Register.new(user: user, event: event).call
+    Registrations::Cancel.new(user: user, event: event).call
+
+    perform_enqueued_jobs { Outbox::Publisher.new.call }
+
+    notification = Notification.find_by!(user: user, kind: "registration_cancelled")
+    expect(notification.title).to eq("Registration cancelled")
+    expect(notification.body).to eq("Your registration for Health forum was cancelled.")
+  end
 end

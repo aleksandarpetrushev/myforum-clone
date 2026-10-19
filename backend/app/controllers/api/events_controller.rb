@@ -25,21 +25,6 @@ module Api
       head :no_content
     end
 
-    def register
-      event = policy_scope(Event).find(params[:id])
-      authorize event, :show?
-      @registration = Events::Register.new(user: current_user, event: event).call
-      Metrics.increment("registration_success_total")
-      render json: @registration.as_json_api, status: :created
-    rescue Events::Register::AlreadyRegistered
-      Metrics.increment("registration_failure_total")
-      render_error(
-        code: "duplicate_registration",
-        message: "You are already registered for this event.",
-        status: :conflict
-      )
-    end
-
     private
 
     def list_payload

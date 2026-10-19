@@ -2,7 +2,7 @@ module Outbox
   class Dispatcher
     def self.call(event)
       case event.event_type
-      when "RegistrationCreated"
+      when "RegistrationCreated", "RegistrationCancelled"
         SendNotificationJob.perform_later(event.id)
         RecordAnalyticsJob.perform_later(event.id)
       when "EventUpdated", "TopicFollowed", "TopicUnfollowed"

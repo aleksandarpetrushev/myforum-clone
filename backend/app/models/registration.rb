@@ -1,11 +1,26 @@
 class Registration < ApplicationRecord
-  STATUSES = %w[pending confirmed cancelled failed].freeze
+  STATUSES = %w[confirmed cancelled failed].freeze
 
   belongs_to :user
   belongs_to :event
 
   validates :status, inclusion: { in: STATUSES }
   validates :user_id, uniqueness: { scope: :event_id }
+  validates :lifecycle_version, numericality: { only_integer: true, greater_than: 0 }
+
+  state_machine :status, initial: :confirmed do
+    state :confirmed
+    state :cancelled
+    state :failed
+
+    event :cancel do
+      transition confirmed: :cancelled
+    end
+
+    event :reconfirm do
+      transition cancelled: :confirmed
+    end
+  end
 
   def as_json_api
     {

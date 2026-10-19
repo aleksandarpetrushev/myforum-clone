@@ -252,6 +252,13 @@ GEM
       logger
       rack (>= 2.2.4)
       redis-client (>= 0.22.2)
+    state_machines (0.202.0)
+    state_machines-activemodel (0.31.0)
+      activemodel (>= 7.1)
+      state_machines (>= 0.31.0)
+    state_machines-activerecord (0.31.0)
+      activerecord (>= 7.1)
+      state_machines-activemodel (>= 0.10.0)
     thor (1.5.0)
     timeout (0.6.1)
     tsort (0.2.0)
@@ -289,6 +296,8 @@ DEPENDENCIES
   redis (~> 5.3)
   rspec-rails (~> 6.1)
   sidekiq (~> 7.3)
+  state_machines (~> 0.6)
+  state_machines-activerecord (~> 0.9)
   tzinfo-data
 
 RUBY VERSION

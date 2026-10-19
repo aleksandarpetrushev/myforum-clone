@@ -38,19 +38,26 @@ RSpec.describe "API", type: :request do
     expect(json_body["data"].map { |row| row["id"] }).to include(event.id)
   end
 
+  it "returns user_not_registered when cancelling without a registration" do
+    post "/api/registrations/cancel", params: { event_id: event.id }, headers: auth_headers(user)
+
+    expect(response).to have_http_status(:not_found)
+    expect(json_body.dig("error", "code")).to eq("user_not_registered")
+  end
+
   it "registers the user and reports a duplicate as a conflict" do
-    post "/api/events/#{event.id}/register", headers: auth_headers(user)
+    post "/api/registrations", params: { event_id: event.id }, headers: auth_headers(user)
     expect(response).to have_http_status(:created)
     expect(json_body["status"]).to eq("confirmed")
 
-    post "/api/events/#{event.id}/register", headers: auth_headers(user)
+    post "/api/registrations", params: { event_id: event.id }, headers: auth_headers(user)
     expect(response).to have_http_status(:conflict)
     expect(json_body.dig("error", "code")).to eq("duplicate_registration")
   end
 
   it "returns event_full when capacity is exhausted" do
     event.update!(capacity: 1, reserved_spots: 1)
-    post "/api/events/#{event.id}/register", headers: auth_headers(user)
+    post "/api/registrations", params: { event_id: event.id }, headers: auth_headers(user)
 
     expect(response).to have_http_status(:conflict)
     expect(json_body.dig("error", "code")).to eq("event_full")
@@ -118,7 +125,7 @@ RSpec.describe "API", type: :request do
       expect(response).to have_http_status(:not_found)
       expect(response.body).not_to include("Private clinic")
 
-      post "/api/events/#{restricted.id}/register", headers: auth_headers(user)
+      post "/api/registrations", params: { event_id: restricted.id }, headers: auth_headers(user)
       expect(response).to have_http_status(:not_found)
     end
 
@@ -133,7 +140,7 @@ RSpec.describe "API", type: :request do
       expect(response).to have_http_status(:ok)
       expect(json_body["visibility"]).to eq("organization_restricted")
 
-      post "/api/events/#{restricted.id}/register", headers: auth_headers(member)
+      post "/api/registrations", params: { event_id: restricted.id }, headers: auth_headers(member)
       expect(response).to have_http_status(:created)
     end
 
@@ -141,6 +148,7 @@ RSpec.describe "API", type: :request do
       first = OrganizationMembership.create!(user: member, organization: partner, role: "member")
       second_membership = OrganizationMembership.create!(user: member, organization: second, role: "member")
       Registration.create!(user: member, event: restricted, status: "confirmed")
+      restricted.update!(reserved_spots: 1)
 
       first.destroy!
       get "/api/events/#{restricted.id}", headers: auth_headers(member)
@@ -151,7 +159,20 @@ RSpec.describe "API", type: :request do
       expect(response).to have_http_status(:not_found)
 
       get "/api/me/registrations", headers: auth_headers(member)
-      expect(json_body["data"]).to eq([])
+      expect(json_body["data"].map { |row| row["event_id"] }).to eq([restricted.id])
+      expect(json_body.dig("data", 0, "event", "viewable")).to be(false)
+
+      post "/api/registrations/cancel", params: { event_id: restricted.id }, headers: auth_headers(member)
+      expect(response).to have_http_status(:ok)
+      expect(json_body["status"]).to eq("cancelled")
+      expect(restricted.reload.reserved_spots).to eq(0)
+
+      get "/api/events/#{restricted.id}", headers: auth_headers(member)
+      expect(response).to have_http_status(:not_found)
+
+      post "/api/registrations/cancel", params: { event_id: restricted.id }, headers: auth_headers(user)
+      expect(response).to have_http_status(:not_found)
+      expect(json_body.dig("error", "code")).to eq("not_found")
     end
 
     it "hides an event after it becomes organization restricted" do

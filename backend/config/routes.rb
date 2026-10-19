@@ -5,9 +5,11 @@ Rails.application.routes.draw do
   namespace :api do
     post "session", to: "sessions#create"
 
-    resources :events, only: [:index, :show, :update, :destroy] do
-      member do
-        post :register
+    resources :events, only: [:index, :show, :update, :destroy]
+
+    resources :registrations, only: :create do
+      collection do
+        post :cancel
       end
     end
 

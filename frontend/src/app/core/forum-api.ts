@@ -26,7 +26,11 @@ export class ForumApi {
   }
 
   register(eventId: number): Observable<Registration> {
-    return this.http.post<Registration>(`${API_URL}/api/events/${eventId}/register`, {});
+    return this.http.post<Registration>(`${API_URL}/api/registrations`, { event_id: eventId });
+  }
+
+  cancelRegistration(eventId: number): Observable<Registration> {
+    return this.http.post<Registration>(`${API_URL}/api/registrations/cancel`, { event_id: eventId });
   }
 
   topics(): Observable<{ data: Topic[] }> {

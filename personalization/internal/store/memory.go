@@ -40,7 +40,7 @@ func (m *Memory) Apply(_ context.Context, incoming Incoming) error {
 	}
 
 	switch incoming.EventType {
-	case "EventUpdated", "RegistrationCreated":
+	case "EventUpdated", "RegistrationCreated", "RegistrationCancelled":
 		snapshot, _ := incoming.Payload["event"].(map[string]any)
 		if snapshot == nil {
 			break

@@ -20,4 +20,20 @@ describe('ForumApi', () => {
     request.flush({ data: [] });
     http.verify();
   });
+
+  it('cancels a registration by event id', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const api = TestBed.inject(ForumApi);
+    const http = TestBed.inject(HttpTestingController);
+
+    api.cancelRegistration(6).subscribe();
+
+    const request = http.expectOne('http://localhost:3000/api/registrations/cancel');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ event_id: 6 });
+    request.flush({ id: 1, status: 'cancelled', event_id: 6, event: { id: 6, title: 'Clinic', starts_at: '', location: 'Online' } });
+    http.verify();
+  });
 });

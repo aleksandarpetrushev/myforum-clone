@@ -76,7 +76,8 @@ The seed creates 8 organizations, 15 topics, 100 events, speakers, follows, and 
 - Send `Authorization: Bearer <token>` on later requests
 - `GET /api/events` supports `q`, `topic_id`, `location`, `upcoming`, and `page`. Results include public events and organization-restricted events the caller may see.
 - `GET /api/events/:id`
-- `POST /api/events/:id/register`
+- `POST /api/registrations` with `event_id` registers the current user
+- `POST /api/registrations/cancel` with `event_id` cancels that registration, including after the caller can no longer view the event
 - `PATCH /api/events/:id` for an organizer admin
 - `GET /api/topics`
 - `POST /api/topics/:id/follow`

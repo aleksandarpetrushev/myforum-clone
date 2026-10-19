@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_18_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_19_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -136,10 +136,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_18_120000) do
     t.string "status", default: "confirmed", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "lifecycle_version", default: 1, null: false
     t.index ["event_id"], name: "index_registrations_on_event_id"
     t.index ["user_id", "event_id"], name: "index_registrations_on_user_id_and_event_id", unique: true
     t.index ["user_id"], name: "index_registrations_on_user_id"
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'confirmed'::character varying, 'cancelled'::character varying, 'failed'::character varying]::text[])", name: "registrations_status_valid"
+    t.check_constraint "status::text = ANY (ARRAY['confirmed'::character varying, 'cancelled'::character varying, 'failed'::character varying]::text[])", name: "registrations_status_valid"
   end
 
   create_table "speakers", force: :cascade do |t|

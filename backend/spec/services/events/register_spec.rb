@@ -23,8 +23,26 @@ RSpec.describe Events::Register do
     expect(registration.status).to eq("confirmed")
     expect(event.reload.reserved_spots).to eq(1)
     outbox = OutboxEvent.find_by!(event_type: "RegistrationCreated", aggregate_id: registration.id)
+    expect(outbox.idempotency_key).to eq("registration_created:#{registration.id}:1")
     expect(outbox.payload["user_id"]).to eq(user.id)
     expect(outbox.payload["event_id"]).to eq(event.id)
+  end
+
+  it "confirms a cancelled registration again with a new outbox key" do
+    registration = described_class.new(user: user, event: event).call
+    Registrations::Cancel.new(user: user, event: event).call
+
+    again = described_class.new(user: user, event: event).call
+
+    expect(again.id).to eq(registration.id)
+    expect(again.status).to eq("confirmed")
+    expect(again.lifecycle_version).to eq(3)
+    expect(event.reload.reserved_spots).to eq(1)
+    keys = OutboxEvent.where(event_type: "RegistrationCreated", aggregate_id: registration.id).order(:id).pluck(:idempotency_key)
+    expect(keys).to eq([
+      "registration_created:#{registration.id}:1",
+      "registration_created:#{registration.id}:3"
+    ])
   end
 
   it "rejects a second registration for the same user" do

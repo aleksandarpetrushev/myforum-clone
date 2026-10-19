@@ -37,7 +37,7 @@ export interface Registration {
   id: number;
   status: string;
   event_id: number;
-  event: { id: number; title: string; starts_at: string; location: string };
+  event: { id: number; title: string; starts_at: string; location: string; viewable?: boolean };
 }
 
 export interface NotificationItem {
