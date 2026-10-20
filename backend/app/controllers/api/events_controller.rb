@@ -36,7 +36,7 @@ module Api
     end
 
     def filtered_events
-      events = policy_scope(Event).published.includes(:organization, :topics).order(:starts_at)
+      events = policy_scope(Event).published.includes(:organization, :topics).in_start_order
       events = events.upcoming if upcoming?
       events = events.matching_text(params[:q]) if params[:q].present?
       events = events.in_location(params[:location]) if params[:location].present?

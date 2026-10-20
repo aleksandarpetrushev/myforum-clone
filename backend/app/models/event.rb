@@ -23,6 +23,8 @@ class Event < ApplicationRecord
 
   after_commit :invalidate_event_caches, on: %i[create update destroy]
 
+  # starts_at is not unique. id keeps offset pages stable when several events share a start.
+  scope :in_start_order, -> { order(starts_at: :asc, id: :asc) }
   scope :published, -> { where(status: "published") }
   scope :upcoming, -> { where("starts_at >= ?", Time.current) }
   scope :in_location, ->(location) { where(location: location) }

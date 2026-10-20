@@ -61,7 +61,7 @@ An earlier two-worker report of 300.0 rps counted completions from the drain sec
 
 These runs are one local machine, one sample each, with a warm Postgres cache. They do not measure a deployed fleet, a cold cache, or a rate above 300 requests/sec. Two workers absorbed the offered load, so this run does not show where that configuration saturates.
 
-`service_ms` starts when the client sends the request and includes time spent waiting for a Puma thread. Searches shorter than three characters do not use a trigram index. The list is still ordered only by `starts_at`. On this seed the largest shared start is 5,001 events, and the two page reads in `bench:discover` did not overlap.
+`service_ms` starts when the client sends the request and includes time spent waiting for a Puma thread. Searches shorter than three characters do not use a trigram index. The list order is `starts_at`, then `id`. On this seed the largest shared start is 5,001 events. `bench:discover` fails when a page changes between reads, when adjacent pages share an id, or when rows in a tied page are not in that order.
 
 ## Deploying the indexes
 

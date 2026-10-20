@@ -38,6 +38,55 @@ RSpec.describe "API", type: :request do
     expect(json_body["data"].map { |row| row["id"] }).to include(event.id)
   end
 
+  it "pages events that share a start time by id" do
+    shared = Time.zone.parse("2030-06-01 15:00:00")
+    base = Event.maximum(:id).to_i
+    now = Time.current
+    tie_ids = (1..21).map { |offset| base + offset }
+    Event.insert_all(tie_ids.reverse.map { |id|
+      {
+        id: id,
+        organization_id: organization.id,
+        title: "Tied #{id}",
+        description: "Same start",
+        starts_at: shared,
+        ends_at: shared + 2.hours,
+        location: "Berlin",
+        kind: "in_person",
+        capacity: 10,
+        created_at: now,
+        updated_at: now
+      }
+    })
+    Event.connection.execute("SELECT setval(pg_get_serial_sequence('events', 'id'), (SELECT MAX(id) FROM events))")
+    early = Event.create!(
+      organization: organization,
+      title: "Earlier",
+      description: "Starts first",
+      starts_at: shared - 1.day,
+      ends_at: shared - 1.day + 2.hours,
+      location: "Berlin",
+      kind: "in_person",
+      capacity: 10,
+      status: "published"
+    )
+
+    pages = lambda do |page|
+      get "/api/events", params: { page: page }, headers: auth_headers(user)
+      expect(response).to have_http_status(:ok)
+      json_body["data"].map { |row| row["id"] }
+    end
+
+    expected = [early.id] + tie_ids.sort
+    page1 = pages.call(1)
+    page2 = pages.call(2)
+
+    expect(page1).to eq(expected.first(20))
+    expect(pages.call(1)).to eq(page1)
+    expect(page2).to eq(expected.drop(20))
+    expect(page1 & page2).to be_empty
+  end
+
   it "returns user_not_registered when cancelling without a registration" do
     post "/api/registrations/cancel", params: { event_id: event.id }, headers: auth_headers(user)
 

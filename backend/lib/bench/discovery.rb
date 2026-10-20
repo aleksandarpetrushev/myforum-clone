@@ -114,6 +114,8 @@ module Bench
       pagination = checks["pagination"] || {}
       puts "page 1 stable across two reads: #{pagination["page_1_stable"]}"
       puts "ids shared by page 1 and page 2: #{pagination["page_1_and_2_overlap"]}"
+      puts "ordered by starts_at, id: #{pagination["ordered_by_start_then_id"]}"
+      puts "tie page #{pagination["tie_page"]} (#{pagination["tie_count"]} events) stable: #{pagination["tie_page_stable"]} overlap: #{pagination["tie_pages_overlap"]}"
       puts "largest published start tie: #{report.dig("dataset", "largest_start_tie")}"
     end
 
@@ -247,6 +249,7 @@ module Bench
       expect_set(failures, "member admin-token search", member_admin, [])
 
       pagination = pagination_notes(session, tokens.fetch("outsider"))
+      failures.concat(pagination_failures(pagination))
       {
         "passed" => failures.empty?,
         "failures" => failures,
@@ -281,24 +284,89 @@ module Bench
     end
     private_class_method :walk_ids
 
+    def self.pagination_failures(notes)
+      failures = []
+      failures << "upcoming page 1 changed between reads" unless notes["page_1_stable"]
+      failures << "upcoming page 1 repeated an id" if notes["duplicate_ids_on_page_1"].to_i.positive?
+      failures << "upcoming pages 1 and 2 shared ids" if notes["page_1_and_2_overlap"].to_i.positive?
+      failures << "upcoming pages were not ordered by starts_at, then id" unless notes["ordered_by_start_then_id"]
+      failures << "tied start page changed between reads" unless notes["tie_page_stable"]
+      failures << "tied start pages shared ids" if notes["tie_pages_overlap"].to_i.positive?
+      failures
+    end
+
     def self.pagination_notes(session, token)
-      first = fetch(session, token, {})
-      second = fetch(session, token, {})
-      third = fetch(session, token, { page: 2 })
-      [first, second, third].each do |elapsed, status, body|
-        raise CheckFailed, "upcoming list failed with #{status}" unless status == 200
-        raise CheckFailed, "timing placeholder #{elapsed}" if elapsed.nil?
-      end
-      page_a = Array(first[2]["data"]).map { |row| row.fetch("id") }
-      page_b = Array(second[2]["data"]).map { |row| row.fetch("id") }
-      page_2 = Array(third[2]["data"]).map { |row| row.fetch("id") }
+      page_a = event_page(session, token, 1)
+      page_b = event_page(session, token, 1)
+      page_2 = event_page(session, token, 2)
+      tie = tie_window(session, token)
       {
-        "page_1_stable" => page_a == page_b,
-        "page_1_and_2_overlap" => (page_a & page_2).size,
-        "duplicate_ids_on_page_1" => page_a.size - page_a.uniq.size
+        "page_1_stable" => ids_of(page_a) == ids_of(page_b),
+        "page_1_and_2_overlap" => (ids_of(page_a) & ids_of(page_2)).size,
+        "duplicate_ids_on_page_1" => page_a.size - ids_of(page_a).uniq.size,
+        "ordered_by_start_then_id" => ordered_pages?([page_a, page_2]) && ordered_pages?(tie.fetch("pages")),
+        "tie_starts_at" => tie["starts_at"],
+        "tie_count" => tie["count"],
+        "tie_page" => tie["page"],
+        "tie_page_stable" => tie["stable"],
+        "tie_pages_overlap" => tie["overlap"]
       }
     end
     private_class_method :pagination_notes
+
+    def self.tie_window(session, token)
+      user = User.find_by!(email: persona_email("outsider"))
+      scope = EventPolicy::Scope.new(user, Event.all).resolve.published.upcoming
+      starts_at, count = scope.group(:starts_at).order(Arel.sql("COUNT(*) DESC")).limit(1).pick(:starts_at, Arel.sql("COUNT(*)"))
+      empty = { "pages" => [], "starts_at" => nil, "count" => count.to_i, "page" => nil, "stable" => true, "overlap" => 0 }
+      return empty if starts_at.nil? || count.to_i < 2
+
+      page = (scope.where("starts_at < ?", starts_at).count / PAGE_SIZE) + 1
+      first = event_page(session, token, page)
+      second = event_page(session, token, page)
+      nxt = event_page(session, token, page + 1)
+      {
+        "pages" => [first, nxt],
+        "starts_at" => starts_at.iso8601,
+        "count" => count,
+        "page" => page,
+        "stable" => ids_of(first) == ids_of(second),
+        "overlap" => (ids_of(first) & ids_of(nxt)).size
+      }
+    end
+    private_class_method :tie_window
+
+    def self.event_page(session, token, page)
+      _elapsed, status, body = fetch(session, token, { page: page })
+      raise CheckFailed, "upcoming list page #{page} failed with #{status}: #{error_text(body)}" unless status == 200
+
+      Array(body["data"])
+    end
+    private_class_method :event_page
+
+    def self.ordered_pages?(pages)
+      present = pages.reject(&:empty?)
+      return true if present.empty?
+      return false unless present.all? { |page| monotonic_start_then_id?(page) }
+
+      present.each_cons(2).all? { |left, right| (sort_key(left.last) <=> sort_key(right.first)) <= 0 }
+    end
+    private_class_method :ordered_pages?
+
+    def self.monotonic_start_then_id?(rows)
+      rows.map { |row| sort_key(row) }.each_cons(2).all? { |left, right| (left <=> right).negative? }
+    end
+    private_class_method :monotonic_start_then_id?
+
+    def self.sort_key(row)
+      [Time.zone.parse(row.fetch("starts_at").to_s), row.fetch("id").to_i]
+    end
+    private_class_method :sort_key
+
+    def self.ids_of(rows)
+      rows.map { |row| row.fetch("id") }
+    end
+    private_class_method :ids_of
 
     def self.time_scenario(session, tokens, scenario, iterations:, warmup:, explain:)
       token = tokens.fetch(scenario.fetch(:user))
@@ -459,7 +527,7 @@ module Bench
     private_class_method :walk_plan
 
     def self.list_relation(user, params)
-      events = EventPolicy::Scope.new(user, Event.all).resolve.published.includes(:organization, :topics).order(:starts_at)
+      events = EventPolicy::Scope.new(user, Event.all).resolve.published.includes(:organization, :topics).in_start_order
       events = events.upcoming if upcoming_param?(params)
       events = events.matching_text(params[:q]) if params[:q].present?
       events = events.in_location(params[:location]) if params[:location].present?

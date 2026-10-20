@@ -20,7 +20,9 @@ RSpec.describe "discovery benchmark", type: :request do
     expect(selective["rows"]).to be <= 20
     expect(selective["explain"]).to include("execution_ms")
     expect(report.dig("mix", "samples")).to eq(8)
-    expect(report.dig("checks", "pagination")).to include("page_1_and_2_overlap")
+    expect(report.dig("checks", "pagination", "page_1_stable")).to be(true)
+    expect(report.dig("checks", "pagination", "page_1_and_2_overlap")).to eq(0)
+    expect(report.dig("checks", "pagination", "ordered_by_start_then_id")).to be(true)
   end
 
   it "builds the mix offered at 300 requests per second" do
@@ -56,5 +58,21 @@ RSpec.describe "discovery benchmark", type: :request do
     expect(summary["abandoned"]).to eq(1)
     expect(summary.dig("service_ms", "p50")).to eq(10.0)
     expect(summary["scenarios"].find { |scenario| scenario["name"] == "upcoming_page_1" }["samples"]).to eq(1)
+  end
+
+  it "rejects unstable or overlapping event pages" do
+    failures = Bench::Discovery.pagination_failures(
+      "page_1_stable" => false,
+      "page_1_and_2_overlap" => 3,
+      "duplicate_ids_on_page_1" => 1,
+      "ordered_by_start_then_id" => false,
+      "tie_page_stable" => false,
+      "tie_pages_overlap" => 2
+    )
+
+    expect(failures).to include("upcoming page 1 changed between reads")
+    expect(failures).to include("upcoming pages 1 and 2 shared ids")
+    expect(failures).to include("upcoming pages were not ordered by starts_at, then id")
+    expect(failures).to include("tied start pages shared ids")
   end
 end
