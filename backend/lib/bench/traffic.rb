@@ -10,12 +10,17 @@ module Bench
   # The server uses the benchmark database, Redis cache, force_ssl, and the
   # production Puma defaults (WEB_CONCURRENCY workers, five threads). Arrivals
   # follow the same discovery mix as Bench::Discovery. Latency above the
-  # client timeout is an error. Requests still queued when the window closes
-  # are unserved.
+  # client timeout is an error.
+  #
+  # Throughput counts only HTTP 200 responses that finish inside the
+  # measurement window. The generator then keeps serving for one second.
+  # Completions in that drain, and work still queued or in flight at the
+  # deadline, are reported separately and are not part of completed_rps.
   class Traffic
     PORT = 3999
     THREADS = 5
     TIMEOUT = 2
+    DRAIN = 1
     SECRET = "bench-traffic-secret"
 
     def self.worker_count
@@ -91,8 +96,12 @@ module Bench
       puts "server #{report.dig("server", "environment")}  #{report.dig("server", "bind")}  workers #{report.dig("server", "workers")}  threads #{report.dig("server", "threads")}"
       puts "database #{report.dig("dataset", "database")}  scale #{report.dig("dataset", "scale")}  events #{report.dig("dataset", "events")}"
       puts
-      puts format("offered %6.1f rps    completed %6.1f rps    success %5.1f%%    unserved %d    errors %d",
-        report["offered_rps"], report["completed_rps"], report["success_percent"], report["unserved"], report["errors"])
+      puts format(
+        "offered %6.1f rps    in-window %6.1f rps    success %5.1f%%    drain %d    deadline queued %d in flight %d    abandoned %d    errors %d",
+        report["offered_rps"], report["completed_rps"], report["success_percent"],
+        report["completed_during_drain"], report.dig("at_deadline", "queued"), report.dig("at_deadline", "in_flight"),
+        report["abandoned"], report["errors"]
+      )
       puts format("end-to-end  p50 %s ms   p95 %s ms   p99 %s ms", ms(report.dig("e2e_ms", "p50")), ms(report.dig("e2e_ms", "p95")), ms(report.dig("e2e_ms", "p99")))
       puts format("service     p50 %s ms   p95 %s ms   p99 %s ms", ms(report.dig("service_ms", "p50")), ms(report.dig("service_ms", "p95")), ms(report.dig("service_ms", "p99")))
       puts "statuses #{report["statuses"].inspect}"
@@ -179,7 +188,7 @@ module Bench
     def self.drive(server, templates, tokens, rate:, duration:, warmup:, manifest:)
       rng = Random.new(Dataset::SEED)
       queue = Queue.new
-      recorded = []
+      offered = []
       mutex = Mutex.new
       stop = { "abandon" => false }
       concurrency = rate
@@ -190,13 +199,23 @@ module Bench
             item = queue.pop
             break if item == :stop
 
-            if stop["abandon"]
-              mutex.synchronize { recorded << item.merge("unserved" => true) }
-              next
+            run = false
+            mutex.synchronize do
+              if stop["abandon"]
+                item["unserved"] = true
+              else
+                item["started_at"] = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                run = true
+              end
             end
+            next unless run
 
             result = client.perform(item)
-            mutex.synchronize { recorded << item.merge(result) }
+            finished = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            mutex.synchronize do
+              item["finished_at"] = finished
+              item.merge!(result)
+            end
           end
         end
       end
@@ -215,41 +234,75 @@ module Bench
           next_report += 5
         end
         name = pick(rng)
-        queue << templates.fetch(name).merge("scheduled" => next_at, "scenario" => name)
+        item = templates.fetch(name).merge("scheduled" => next_at, "scenario" => name)
+        mutex.synchronize { offered << item }
+        queue << item
         next_at += interval
       end
 
-      sleep 1
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      sleep(finish_at - now) if finish_at > now
+      mutex.synchronize { mark_deadline!(offered, measure_at: measure_at, finish_at: finish_at) }
+
+      sleep DRAIN
       stop["abandon"] = true
       concurrency.times { queue << :stop }
       workers.each(&:join)
 
-      report(recorded, manifest, rate: rate, duration: duration, warmup: warmup, measure_at: measure_at)
+      report(offered, manifest, rate: rate, duration: duration, warmup: warmup, measure_at: measure_at)
     end
     private_class_method :drive
 
-    def self.report(recorded, manifest, rate:, duration:, warmup:, measure_at:)
-      measured = recorded.select { |sample| sample["scheduled"] >= measure_at }
-      served = measured.reject { |sample| sample["unserved"] }
-      successes = served.select { |sample| sample["status"] == 200 }
-      errors = served.reject { |sample| sample["status"] == 200 }
-      e2e = successes.map { |sample| sample["e2e_ms"] }.sort
-      service = successes.map { |sample| sample["service_ms"] }.sort
+    def self.mark_deadline!(offered, measure_at:, finish_at:)
+      offered.each do |item|
+        next if item["scheduled"] < measure_at
+
+        item["at_deadline"] =
+          if item["finished_at"] && item["finished_at"] <= finish_at
+            "completed"
+          elsif item["started_at"] && item["started_at"] <= finish_at
+            "in_flight"
+          else
+            "queued"
+          end
+      end
+    end
+    private_class_method :mark_deadline!
+
+    def self.summarize(samples, duration:, warmup:, measure_at:)
+      measured = samples.select { |sample| sample["scheduled"] >= measure_at }
+      window = measured.select { |sample| sample["at_deadline"] == "completed" }
+      successes = window.select { |sample| sample["status"] == 200 }
+      errors = window.reject { |sample| sample["status"] == 200 }
+      drain = measured.select { |sample| sample["finished_at"] && sample["at_deadline"] != "completed" && !sample["unserved"] }
       {
-        "generated_at" => Time.current.iso8601,
-        "note" => "Local production-mode Puma. TLS is terminated by Puma so force_ssl accepts the request. #{worker_count} #{worker_count == 1 ? "process" : "processes"} and #{THREADS} threads each. Redis cache is enabled. service_ms includes waiting for a free Puma thread. This is not a deployed production environment.",
-        "target_rps" => rate,
-        "duration_s" => duration,
         "warmup_s" => warmup,
+        "duration_s" => duration,
+        "drain_s" => DRAIN,
+        "offered" => measured.size,
         "offered_rps" => (measured.size / duration.to_f).round(2),
+        "completed_in_window" => successes.size,
         "completed_rps" => (successes.size / duration.to_f).round(2),
         "success_percent" => measured.empty? ? 0.0 : (100.0 * successes.size / measured.size).round(2),
-        "unserved" => measured.count { |sample| sample["unserved"] },
         "errors" => errors.size,
-        "statuses" => measured.group_by { |sample| sample["unserved"] ? "unserved" : sample["status"] }.transform_values(&:size),
-        "e2e_ms" => percentile_summary(e2e),
-        "service_ms" => percentile_summary(service),
-        "scenarios" => scenario_rows(measured),
+        "completed_during_drain" => drain.size,
+        "at_deadline" => {
+          "queued" => measured.count { |sample| sample["at_deadline"] == "queued" },
+          "in_flight" => measured.count { |sample| sample["at_deadline"] == "in_flight" }
+        },
+        "abandoned" => measured.count { |sample| sample["unserved"] },
+        "statuses" => window.group_by { |sample| sample["status"] }.transform_values(&:size),
+        "e2e_ms" => percentile_summary(successes.map { |sample| sample["e2e_ms"] }.compact.sort),
+        "service_ms" => percentile_summary(successes.map { |sample| sample["service_ms"] }.compact.sort),
+        "scenarios" => scenario_rows(measured)
+      }
+    end
+
+    def self.report(recorded, manifest, rate:, duration:, warmup:, measure_at:)
+      summarize(recorded, duration: duration, warmup: warmup, measure_at: measure_at).merge(
+        "generated_at" => Time.current.iso8601,
+        "note" => "Local production-mode Puma. TLS is terminated by Puma so force_ssl accepts the request. #{worker_count} #{worker_count == 1 ? "process" : "processes"} and #{THREADS} threads each. Redis cache is enabled. completed_rps counts HTTP 200 responses that finish inside the measurement window. service_ms for those responses includes waiting for a free Puma thread. Completions during the following #{DRAIN}s drain are excluded. This is not a deployed production environment.",
+        "target_rps" => rate,
         "server" => {
           "environment" => "production",
           "bind" => "https://127.0.0.1:#{PORT}",
@@ -262,7 +315,7 @@ module Bench
           "scale" => manifest["scale"],
           "events" => manifest.dig("counts", "events")
         }
-      }
+      )
     end
     private_class_method :report
 
@@ -270,14 +323,15 @@ module Bench
       names = Discovery::MIX.map(&:first)
       names.map do |name|
         rows = measured.select { |sample| sample["scenario"] == name }
-        successes = rows.select { |sample| sample["status"] == 200 }
+        successes = rows.select { |sample| sample["at_deadline"] == "completed" && sample["status"] == 200 }
+        errors = rows.select { |sample| sample["at_deadline"] == "completed" && sample["status"] != 200 }
         times = successes.map { |sample| sample["service_ms"] }.compact.sort
         {
           "name" => name,
-          "samples" => rows.size,
+          "samples" => successes.size,
           "p50_ms" => percentile(times, 0.50),
           "p95_ms" => percentile(times, 0.95),
-          "errors" => rows.size - successes.size
+          "errors" => errors.size
         }
       end
     end

@@ -101,7 +101,9 @@ cd backend && bin/rails bench:discover
 
 The report includes p50 and p95 for keyword, topic, location, upcoming, deep pages, and organization visibility, plus the query plan. It is a single-request baseline with a warm Postgres cache.
 
-`bench:traffic` starts production-mode Puma against the benchmark database and offers 300 requests/sec of the same mix for 20 seconds. It writes `backend/tmp/bench/traffic.json`. The process is local: one Puma process, five threads, TLS terminated by Puma, Redis cache enabled.
+`bench:traffic` starts production-mode Puma against the benchmark database and offers 300 requests/sec of the same mix for 20 seconds. It writes `backend/tmp/bench/traffic.json`. The default is one Puma process and five threads. `WEB_CONCURRENCY=2` runs two processes. TLS is terminated by Puma and the Redis cache stays enabled. `completed_rps` counts only responses that finish inside the 20 second window.
+
+The trigram migration builds its indexes with `CREATE INDEX CONCURRENTLY`. See [docs/benchmarks.md](docs/benchmarks.md) for the measured results, the machine, and rollback notes.
 
 Persona password is `password`: `bench-outsider@example.com`, `bench-member@example.com`, and `bench-admin@example.com`.
 
