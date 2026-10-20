@@ -1,4 +1,4 @@
-.PHONY: setup test dev
+.PHONY: setup test dev bench
 
 setup:
 	docker compose up -d
@@ -10,6 +10,9 @@ test:
 	cd backend && bundle exec rspec
 	cd personalization && go test ./...
 	cd frontend && npm test -- --watch=false
+
+bench:
+	cd backend && bin/rails bench:run
 
 dev:
 	@echo "Start each process in its own terminal:"

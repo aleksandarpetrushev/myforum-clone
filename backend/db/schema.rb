@@ -10,8 +10,9 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_19_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
   # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_trgm"
   enable_extension "plpgsql"
 
   create_table "analytics_events", force: :cascade do |t|
@@ -68,10 +69,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_19_120000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "visibility", default: "public", null: false
+    t.index ["description"], name: "index_events_on_description_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["location"], name: "index_events_on_location"
     t.index ["organization_id"], name: "index_events_on_organization_id"
     t.index ["starts_at"], name: "index_events_on_starts_at"
     t.index ["status"], name: "index_events_on_status"
+    t.index ["title"], name: "index_events_on_title_trgm", opclass: :gin_trgm_ops, using: :gin
     t.check_constraint "capacity > 0", name: "events_capacity_positive"
     t.check_constraint "ends_at > starts_at", name: "events_ends_after_start"
     t.check_constraint "kind::text = ANY (ARRAY['online'::character varying, 'in_person'::character varying]::text[])", name: "events_kind_valid"

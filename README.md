@@ -88,6 +88,23 @@ The seed creates 8 organizations, 15 topics, 100 events, speakers, follows, and 
 
 Production requires `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, and `RAILS_MASTER_KEY`.
 
+## Benchmarks
+
+Discovery timings use a separate database, `my_forum_benchmark`, so they do not replace the development seed.
+
+```bash
+cd backend && bin/rails bench:prepare
+cd backend && bin/rails bench:discover
+```
+
+`bench:prepare` loads the ticket scale: 100,000 events, 50,000 users, 5,000 organizations, and 150,000 memberships. `BENCH_SCALE=smoke` loads a smaller copy of the same shape. `bench:discover` times `GET /api/events` through the Rails stack with the response cache disabled and writes `backend/tmp/bench/discovery.json`.
+
+The report includes p50 and p95 for keyword, topic, location, upcoming, deep pages, and organization visibility, plus the query plan. It is a single-request baseline with a warm Postgres cache.
+
+`bench:traffic` starts production-mode Puma against the benchmark database and offers 300 requests/sec of the same mix for 20 seconds. It writes `backend/tmp/bench/traffic.json`. The process is local: one Puma process, five threads, TLS terminated by Puma, Redis cache enabled.
+
+Persona password is `password`: `bench-outsider@example.com`, `bench-member@example.com`, and `bench-admin@example.com`.
+
 ## Tests
 
 ```bash
