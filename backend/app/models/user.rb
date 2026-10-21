@@ -7,6 +7,7 @@ class User < ApplicationRecord
   has_many :followed_topics, through: :topic_follows, source: :topic
   has_many :registrations, dependent: :destroy
   has_many :notifications, dependent: :destroy
+  has_one :notification_preference, dependent: :destroy
 
   validates :name, presence: true
   validates :email, presence: true, uniqueness: { case_sensitive: false }

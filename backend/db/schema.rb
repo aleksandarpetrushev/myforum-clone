@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_21_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_trgm"
   enable_extension "plpgsql"
@@ -83,6 +83,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
     t.check_constraint "visibility::text = ANY (ARRAY['public'::character varying, 'organization_restricted'::character varying]::text[])", name: "events_visibility_valid"
   end
 
+  create_table "notification_preferences", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.boolean "registration_confirmed_enabled", default: true, null: false
+    t.boolean "registration_cancelled_enabled", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_notification_preferences_on_user_id", unique: true
+  end
+
   create_table "notifications", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "kind", null: false
@@ -94,8 +103,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["idempotency_key"], name: "index_notifications_on_idempotency_key", unique: true
-    t.index ["user_id", "created_at"], name: "index_notifications_on_user_id_and_created_at"
-    t.index ["user_id"], name: "index_notifications_on_user_id"
+    t.index ["user_id", "created_at", "id"], name: "index_notifications_on_user_id_and_created_at_and_id", order: { created_at: :desc, id: :desc }
+    t.index ["user_id"], name: "index_notifications_on_user_id_unread", where: "(read_at IS NULL)"
   end
 
   create_table "organization_memberships", force: :cascade do |t|
@@ -189,6 +198,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_20_160000) do
   add_foreign_key "event_topics", "events"
   add_foreign_key "event_topics", "topics"
   add_foreign_key "events", "organizations"
+  add_foreign_key "notification_preferences", "users"
   add_foreign_key "notifications", "users"
   add_foreign_key "organization_memberships", "organizations"
   add_foreign_key "organization_memberships", "users"

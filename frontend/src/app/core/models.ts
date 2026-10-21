@@ -49,6 +49,17 @@ export interface NotificationItem {
   created_at: string;
 }
 
+export interface NotificationPage {
+  data: NotificationItem[];
+  unread_count: number;
+  next_cursor: string | null;
+}
+
+export interface NotificationPreferences {
+  registration_confirmed_enabled: boolean;
+  registration_cancelled_enabled: boolean;
+}
+
 export interface ApiError {
   error: { code: string; message: string };
 }

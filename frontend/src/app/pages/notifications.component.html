@@ -1,10 +1,66 @@
 <h1>Notifications</h1>
+<p class="unread-count">{{ unreadCount() }} unread</p>
+
+@if (loading()) {
+  <p class="muted">Loading notifications</p>
+}
 @if (error()) {
   <p class="error">{{ error() }}</p>
 }
+
+<button type="button" (click)="markAll()" [disabled]="markingAll() || unreadCount() === 0">Mark all read</button>
+
 @for (notification of notifications(); track notification.id) {
-  <article class="card">
-    <h2>{{ notification.title }}</h2>
-    <p>{{ notification.body }}</p>
+  <article class="card notification">
+    @if (!notification.read_at) {
+      <button
+        type="button"
+        class="unread-dot"
+        aria-label="Mark as read"
+        [disabled]="markingId() === notification.id"
+        (click)="markRead(notification)"
+      ></button>
+    }
+    <div>
+      <h2>{{ notification.title }}</h2>
+      <p class="muted">{{ notification.created_at | date: 'medium' }}</p>
+      <p>{{ notification.body }}</p>
+    </div>
   </article>
 }
+
+@if (!loading() && notifications().length === 0) {
+  <p class="muted">No notifications</p>
+}
+
+@if (nextCursor()) {
+  <button type="button" class="secondary" (click)="loadOlder()" [disabled]="loadingMore()">
+    {{ loadingMore() ? 'Loading' : 'Older notifications' }}
+  </button>
+}
+
+<h2>Notification preferences</h2>
+<label class="preference">
+  <span>
+    <strong>Registration confirmations</strong>
+    Notify me when my registration is confirmed
+  </span>
+  <input
+    type="checkbox"
+    [checked]="preferences()?.registration_confirmed_enabled"
+    [disabled]="savingPreference() || !preferences()"
+    (change)="setPreference('registration_confirmed_enabled', $any($event.target).checked)"
+  />
+</label>
+<label class="preference">
+  <span>
+    <strong>Registration cancellations</strong>
+    Notify me when my registration is cancelled
+  </span>
+  <input
+    type="checkbox"
+    [checked]="preferences()?.registration_cancelled_enabled"
+    [disabled]="savingPreference() || !preferences()"
+    (change)="setPreference('registration_cancelled_enabled', $any($event.target).checked)"
+  />
+</label>

@@ -72,3 +72,32 @@ button:disabled {
 .muted {
   color: #57534e;
 }
+
+.unread-count {
+  font-size: 1.1rem;
+}
+
+.notification {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.unread-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-top: 0.45rem;
+  padding: 0;
+  border-radius: 50%;
+  background: #2563eb;
+}
+
+.preference {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.preference strong {
+  display: block;
+}

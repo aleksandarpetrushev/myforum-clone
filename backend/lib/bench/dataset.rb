@@ -175,7 +175,7 @@ module Bench
     def self.reset!
       if Rails.env.test?
         [
-          AnalyticsEvent, Notification, OutboxEvent, Registration, EventSpeaker, EventTopic,
+          AnalyticsEvent, Notification, NotificationPreference, OutboxEvent, Registration, EventSpeaker, EventTopic,
           TopicFollow, OrganizationMembership, EventAllowedOrganization, Event, Speaker,
           Topic, Organization, User
         ].each(&:delete_all)
@@ -184,6 +184,7 @@ module Bench
           TRUNCATE TABLE
             analytics_events,
             notifications,
+            notification_preferences,
             outbox_events,
             registrations,
             event_speakers,

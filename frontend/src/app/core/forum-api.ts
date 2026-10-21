@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { EventSummary, NotificationItem, Registration, Session, Topic } from './models';
+import { EventSummary, NotificationItem, NotificationPage, NotificationPreferences, Registration, Session, Topic } from './models';
 
 export const API_URL = 'http://localhost:3000';
 
@@ -49,7 +49,27 @@ export class ForumApi {
     return this.http.get<{ data: Registration[] }>(`${API_URL}/api/me/registrations`);
   }
 
-  notifications(): Observable<{ data: NotificationItem[] }> {
-    return this.http.get<{ data: NotificationItem[] }>(`${API_URL}/api/me/notifications`);
+  notifications(cursor?: string | null): Observable<NotificationPage> {
+    let params = new HttpParams();
+    if (cursor) params = params.set('cursor', cursor);
+    return this.http.get<NotificationPage>(`${API_URL}/api/me/notifications`, { params });
+  }
+
+  markNotificationRead(id: number): Observable<NotificationItem & { unread_count: number }> {
+    return this.http.post<NotificationItem & { unread_count: number }>(`${API_URL}/api/me/notifications/${id}/read`, {});
+  }
+
+  markAllNotificationsRead(): Observable<{ unread_count: number }> {
+    return this.http.post<{ unread_count: number }>(`${API_URL}/api/me/notifications/read_all`, {});
+  }
+
+  notificationPreferences(): Observable<NotificationPreferences> {
+    return this.http.get<NotificationPreferences>(`${API_URL}/api/me/notification_preferences`);
+  }
+
+  updateNotificationPreferences(preferences: NotificationPreferences): Observable<NotificationPreferences> {
+    return this.http.patch<NotificationPreferences>(`${API_URL}/api/me/notification_preferences`, {
+      notification_preference: preferences,
+    });
   }
 }

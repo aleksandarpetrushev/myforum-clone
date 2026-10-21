@@ -22,7 +22,15 @@ Rails.application.routes.draw do
 
     namespace :me do
       resources :registrations, only: :index
-      resources :notifications, only: :index
+      resources :notifications, only: :index do
+        member do
+          post :read
+        end
+        collection do
+          post :read_all
+        end
+      end
+      resource :notification_preferences, only: [:show, :update]
     end
   end
 end

@@ -83,7 +83,10 @@ The seed creates 8 organizations, 15 topics, 100 events, speakers, follows, and 
 - `POST /api/topics/:id/follow`
 - `DELETE /api/topics/:id/follow`
 - `GET /api/me/registrations`
-- `GET /api/me/notifications`
+- `GET /api/me/notifications` returns the caller's notifications newest first, plus `unread_count` and `next_cursor`
+- `POST /api/me/notifications/:id/read` marks one notification read
+- `POST /api/me/notifications/read_all` marks all of the caller's unread notifications read
+- `GET /api/me/notification_preferences` and `PATCH /api/me/notification_preferences` store registration notification switches. Both default to enabled.
 - `GET /health` and `GET /ready`
 
 Production requires `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, and `RAILS_MASTER_KEY`.
