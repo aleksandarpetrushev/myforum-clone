@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_21_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_21_220000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_trgm"
   enable_extension "plpgsql"
@@ -137,8 +137,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_21_120000) do
     t.datetime "published_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "notification_outcome"
     t.index ["idempotency_key"], name: "index_outbox_events_on_idempotency_key", unique: true
     t.index ["status", "created_at"], name: "index_outbox_events_on_status_and_created_at"
+    t.check_constraint "notification_outcome IS NULL OR (notification_outcome::text = ANY (ARRAY['delivered'::character varying, 'suppressed'::character varying]::text[]))", name: "outbox_events_notification_outcome_valid"
     t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'published'::character varying]::text[])", name: "outbox_status_valid"
   end
 

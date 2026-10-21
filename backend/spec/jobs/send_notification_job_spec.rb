@@ -24,7 +24,21 @@ RSpec.describe SendNotificationJob do
     perform_enqueued_jobs { Outbox::Publisher.new.call }
 
     expect(Notification.where(user: user)).to be_empty
+    expect(OutboxEvent.find_by!(event_type: "RegistrationCreated").notification_outcome).to eq("suppressed")
     expect(AnalyticsEvent.where(user_id: user.id, name: "RegistrationCreated").count).to eq(1)
+  end
+
+  it "does not deliver a suppressed event after the preference is enabled again" do
+    Events::Register.new(user: user, event: event).call
+    NotificationPreference.update_for(user, registration_confirmed_enabled: false)
+    outbox = OutboxEvent.find_by!(event_type: "RegistrationCreated")
+
+    perform_enqueued_jobs { Outbox::Publisher.new.call }
+    NotificationPreference.update_for(user, registration_confirmed_enabled: true)
+    described_class.perform_now(outbox.id)
+
+    expect(Notification.where(user: user)).to be_empty
+    expect(outbox.reload.notification_outcome).to eq("suppressed")
   end
 
   it "creates one notification when the job is performed twice" do
@@ -34,6 +48,24 @@ RSpec.describe SendNotificationJob do
     2.times { described_class.perform_now(outbox.id) }
 
     expect(Notification.where(user: user, kind: "registration_confirmed").count).to eq(1)
+    expect(outbox.reload.notification_outcome).to eq("delivered")
+  end
+
+  it "records delivery when a retry finds the notification already stored" do
+    Events::Register.new(user: user, event: event).call
+    outbox = OutboxEvent.find_by!(event_type: "RegistrationCreated")
+    Notification.create!(
+      user: user,
+      kind: "registration_confirmed",
+      title: "Registration confirmed",
+      body: "You are registered for Health forum.",
+      idempotency_key: "notification:#{outbox.idempotency_key}"
+    )
+
+    described_class.perform_now(outbox.id)
+
+    expect(Notification.where(user: user).count).to eq(1)
+    expect(outbox.reload.notification_outcome).to eq("delivered")
   end
 end
 
@@ -114,6 +146,7 @@ RSpec.describe "notification preference lock" do
     worker.value
 
     expect(Notification.where(user: user)).to be_empty
+    expect(outbox.reload.notification_outcome).to eq("suppressed")
     expect(NotificationPreference.find_by!(user: user).registration_confirmed_enabled).to be(false)
   end
 end
