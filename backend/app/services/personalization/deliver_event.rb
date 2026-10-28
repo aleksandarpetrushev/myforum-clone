@@ -1,3 +1,5 @@
+require "net/http"
+
 module Personalization
   class DeliveryError < StandardError; end
 
