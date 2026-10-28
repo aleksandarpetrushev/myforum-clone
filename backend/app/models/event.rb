@@ -20,9 +20,37 @@ class Event < ApplicationRecord
   validates :reserved_spots, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validate :ends_after_start
   validate :spots_within_capacity
-  validate :published_stays_published
+  validate :status_follows_machine
 
   after_commit :invalidate_event_caches, on: %i[create update destroy]
+
+  # The only status changes a saved event may make. initial matches the column default, which seeds and
+  # insert_all rely on; the API defaults new events to draft in Events::Create.
+  state_machine :status, initial: :published do
+    state :draft
+    state :published
+    state :cancelled
+
+    event :publish do
+      transition draft: :published
+    end
+
+    event :cancel do
+      transition published: :cancelled
+    end
+
+    # Only Events::Cancel fires this event; it also writes EventCancelled, which starts the registration cascade.
+    before_transition on: :cancel do |event|
+      event.cancelled_at = Time.current
+      event.cancelling_through_event = true
+    end
+
+    after_transition on: :cancel do |event|
+      event.cancelling_through_event = false
+    end
+  end
+
+  attr_accessor :cancelling_through_event
 
   # starts_at is not unique. id keeps offset pages stable when several events share a start.
   scope :in_start_order, -> { order(starts_at: :asc, id: :asc) }
@@ -62,6 +90,7 @@ class Event < ApplicationRecord
       "capacity" => capacity,
       "reserved_spots" => reserved_spots,
       "status" => status,
+      "cancelled_at" => cancelled_at,
       "visibility" => visibility,
       "organization" => { "id" => organization_id, "name" => organization.name },
       "topics" => topics.map { |topic| { "id" => topic.id, "name" => topic.name, "slug" => topic.slug } }
@@ -86,13 +115,16 @@ class Event < ApplicationRecord
     errors.add(:ends_at, :ends_before_start) if ends_at <= starts_at
   end
 
-  # Once an event leaves draft (published, or published then cancelled) it can never be a draft again.
-  def published_stays_published
-    # A new record's status_was is the column default ("published"), so only saved events are checked.
-    return if new_record?
-    return unless status_changed? && status == "draft" && status_was != "draft"
+  # Plain writes such as update!(status: ...) skip the machine's events, so check them against the machine too.
+  # Cancelling is stricter: it must come through the cancel event (Events::Cancel), never a plain write, or the
+  # event would end up cancelled with no cancelled_at, no EventCancelled row and registrations never cancelled.
+  # A new record has no transition: Events::Create decides its starting status.
+  def status_follows_machine
+    return if new_record? || !status_changed? || !STATUSES.include?(status)
 
-    errors.add(:status, :cannot_return_to_draft)
+    allowed = status_transitions(from: status_was.to_sym, to: status.to_sym).any?
+    allowed &&= cancelling_through_event if status == "cancelled"
+    errors.add(:status, :invalid_transition) unless allowed
   end
 
   def spots_within_capacity

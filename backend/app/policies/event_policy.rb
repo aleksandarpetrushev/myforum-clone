@@ -7,10 +7,11 @@ class EventPolicy
   end
 
   # A draft is visible only to the organizing organization's admins, including by direct link.
+  # A cancelled event stays visible under the same rules as a published one, so registrants can see it.
   def show?
     return false unless user
     return true if admin_of_organizer?
-    return false unless published?
+    return false if draft?
     return true if public_event?
 
     member_of_allowed_organization?
@@ -21,6 +22,10 @@ class EventPolicy
   end
 
   def update?
+    admin_of_organizer?
+  end
+
+  def cancel?
     admin_of_organizer?
   end
 
@@ -39,7 +44,7 @@ class EventPolicy
 
       scope.where(<<~SQL.squish, user.id, user.id)
         (
-          events.status = 'published'
+          events.status IN ('published', 'cancelled')
           AND (
             events.visibility = 'public'
             OR (
@@ -72,8 +77,8 @@ class EventPolicy
 
   private
 
-  def published?
-    event.status == "published"
+  def draft?
+    event.status == "draft"
   end
 
   def public_event?

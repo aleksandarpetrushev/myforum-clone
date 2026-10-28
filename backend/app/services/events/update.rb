@@ -5,6 +5,8 @@ module Events
       @attributes = attributes.to_h.stringify_keys
     end
 
+    # Any status may be sent; the Event state machine decides whether the change is allowed. Cancelling is refused
+    # here: it only happens through Events::Cancel (POST /api/events/:id/cancel).
     def call
       allowed_ids = extract_allowed_ids
       validate_allowed_organizations!(allowed_ids)

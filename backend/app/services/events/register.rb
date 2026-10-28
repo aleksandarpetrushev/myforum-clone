@@ -26,6 +26,7 @@ module Events
           raise EventFull if event.reserved_spots >= event.capacity
 
           registration.lifecycle_version += 1
+          registration.cancelled_by = nil
           registration.reconfirm!
         elsif registration.confirmed? || registration.failed?
           raise AlreadyRegistered

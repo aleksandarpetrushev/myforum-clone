@@ -4,6 +4,9 @@
 }
 @if (event(); as current) {
   <h1>{{ current.title }}</h1>
+  @if (cancelled()) {
+    <p class="error"><strong>Cancelled</strong> on {{ current.cancelled_at | date: 'mediumDate' }}</p>
+  }
   <p class="muted">{{ current.starts_at }} · {{ current.location }} · {{ current.kind }}</p>
   <p>{{ current.description }}</p>
   <p>{{ current.reserved_spots }} of {{ current.capacity }} spots reserved</p>
@@ -15,7 +18,21 @@
       }
     </ul>
   }
-  <button type="button" (click)="register()">Register</button>
+  @if (!cancelled()) {
+    <button type="button" (click)="register()">Register</button>
+  }
+
+  @if (canCancel()) {
+    @if (cancelling()) {
+      <p>Cancelling…</p>
+    } @else if (confirmingCancel()) {
+      <p>Cancel {{ current.title }}? Every registration will be cancelled and registrants notified. This cannot be undone.</p>
+      <button type="button" (click)="confirmCancel()" [disabled]="cancelling()">Confirm cancel event</button>
+      <button type="button" class="secondary" (click)="keepEvent()" [disabled]="cancelling()">Keep event</button>
+    } @else {
+      <button type="button" class="secondary" (click)="askCancel()">Cancel event</button>
+    }
+  }
 }
 @if (message()) {
   <p>{{ message() }}</p>

@@ -74,6 +74,39 @@ func TestEventPublishedAddsTheEventToCandidates(t *testing.T) {
 	}
 }
 
+func TestEventCancelledRemovesTheEventFromCandidates(t *testing.T) {
+	memory := NewMemory()
+	snapshot := func(status string) map[string]any {
+		return map[string]any{
+			"id":             float64(8),
+			"title":          "Called off",
+			"location":       "Geneva",
+			"starts_at":      time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339),
+			"status":         status,
+			"reserved_spots": float64(3),
+			"capacity":       float64(80),
+			"topic_ids":      []any{float64(5)},
+			"visibility":     "public",
+		}
+	}
+
+	published := Incoming{IdempotencyKey: "event_published:8", EventType: "EventPublished", Payload: map[string]any{"event": snapshot("published")}}
+	cancelled := Incoming{IdempotencyKey: "event_cancelled:8", EventType: "EventCancelled", Payload: map[string]any{"event": snapshot("cancelled")}}
+	for _, incoming := range []Incoming{published, cancelled} {
+		if err := memory.Apply(context.Background(), incoming); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	events, _, err := memory.Candidates(context.Background(), 1, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected no candidates after cancellation, got %+v", events)
+	}
+}
+
 func TestRegistrationCancelledUpdatesReservedSpots(t *testing.T) {
 	memory := NewMemory()
 	startsAt := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)

@@ -25,6 +25,15 @@ module Api
       render json: updated.as_detail_json
     end
 
+    def cancel
+      event = policy_scope(Event).find(params[:id])
+      authorize event
+      cancelled = Events::Cancel.new(event: event).call
+      render json: cancelled.as_detail_json
+    rescue Events::Cancel::EventStarted
+      render_event_started
+    end
+
     def destroy
       event = policy_scope(Event).find(params[:id])
       authorize event
@@ -34,6 +43,10 @@ module Api
     end
 
     private
+
+    def render_event_started
+      render_error(code: "event_started", message: "An event cannot be cancelled after it starts.", status: :unprocessable_entity)
+    end
 
     def list_payload
       if cacheable_list?

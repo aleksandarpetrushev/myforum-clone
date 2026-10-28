@@ -207,7 +207,7 @@ RSpec.describe "Event creation", type: :request do
     create_event(admin)
     event_id = json_body["id"]
 
-    patch "/api/events/#{event_id}", params: { event: { status: "cancelled" } }, headers: auth_headers(admin), as: :json
+    post "/api/events/#{event_id}/cancel", headers: auth_headers(admin), as: :json
     expect(response).to have_http_status(:ok)
 
     patch "/api/events/#{event_id}", params: { event: { status: "draft" } }, headers: auth_headers(admin), as: :json

@@ -35,6 +35,12 @@ class Metrics
       (Time.current - oldest).round
     end
 
+    # Above 0 for longer than the job retry window means a cancellation cascade is stuck.
+    # Recover with bin/rails events:resume_cancellations.
+    def cancelled_events_with_confirmed_registrations
+      Events::StuckCancellations.scope.count
+    end
+
     def reset!
       LOCK.synchronize { @values = Hash.new(0) }
     end

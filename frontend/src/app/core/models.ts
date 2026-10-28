@@ -27,6 +27,7 @@ export interface EventSummary {
   capacity: number;
   reserved_spots: number;
   status: string;
+  cancelled_at?: string | null;
   organization: { id: number; name: string };
   topics: Topic[];
   description?: string;
@@ -66,8 +67,9 @@ export interface ValidationError {
 export interface Registration {
   id: number;
   status: string;
+  cancelled_by?: 'participant' | 'organizer' | null;
   event_id: number;
-  event?: { id: number; title: string; starts_at: string; location: string } | null;
+  event?: { id: number; title: string; starts_at: string; location: string; status?: string } | null;
 }
 
 export interface NotificationItem {
@@ -88,6 +90,7 @@ export interface NotificationPage {
 export interface NotificationPreferences {
   registration_confirmed_enabled: boolean;
   registration_cancelled_enabled: boolean;
+  event_cancelled_enabled: boolean;
 }
 
 export interface ApiError {
