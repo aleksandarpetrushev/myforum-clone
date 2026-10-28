@@ -13,7 +13,7 @@ module Api
       private
 
       def preference_params
-        params.require(:notification_preference).permit(:registration_confirmed_enabled, :registration_cancelled_enabled)
+        params.require(:notification_preference).permit(:registration_confirmed_enabled, :registration_cancelled_enabled, :event_cancelled_enabled)
       end
     end
   end

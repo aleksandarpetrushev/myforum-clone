@@ -79,7 +79,8 @@ The seed creates 8 organizations, 15 topics, 100 events, speakers, follows, and 
 - `POST /api/registrations` with `event_id` registers the current user
 - `POST /api/registrations/cancel` with `event_id` cancels that registration, including after the caller can no longer view the event
 - `POST /api/events` for an organizer admin creates a `draft` (the default) or `published` event and returns `201` with its details. Drafts are visible only to the organizer's admins. Publishing, on create or later through `PATCH`, writes one `EventPublished` outbox row.
-- `PATCH /api/events/:id` for an organizer admin. A published event cannot go back to draft.
+- `PATCH /api/events/:id` for an organizer admin. Status follows the event state machine: only draft to published here. Cancelling is refused on `PATCH`; use the cancel endpoint.
+- `POST /api/events/:id/cancel` for an organizer admin cancels a published event that has not started. Every confirmed registration is cancelled by a background job, and each registrant gets one `event_cancelled` notification. Cancelling an already cancelled event returns `200` with no further effect. Cancelled events leave discovery but stay viewable under the normal visibility rules.
 - `GET /api/me/organizations` returns the organizations the caller administers
 - `GET /api/organizations` lists every organization, for organization admins only
 - Validation failures return `422` with `error.details` (messages per field) and `error.reasons` (error types per field)
@@ -90,7 +91,7 @@ The seed creates 8 organizations, 15 topics, 100 events, speakers, follows, and 
 - `GET /api/me/notifications` returns the caller's notifications newest first, plus `unread_count` and `next_cursor`
 - `POST /api/me/notifications/:id/read` marks one notification read
 - `POST /api/me/notifications/read_all` marks all of the caller's unread notifications read
-- `GET /api/me/notification_preferences` and `PATCH /api/me/notification_preferences` store registration notification switches. Both default to enabled.
+- `GET /api/me/notification_preferences` and `PATCH /api/me/notification_preferences` store notification switches for registration confirmations, registration cancellations and event cancellations. All default to enabled.
 - `GET /health` and `GET /ready`
 
 Production requires `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, and `RAILS_MASTER_KEY`.

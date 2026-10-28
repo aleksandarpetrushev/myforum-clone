@@ -3,16 +3,19 @@ class NotificationPreference < ApplicationRecord
 
   COLUMNS = {
     "registration_confirmed" => :registration_confirmed_enabled,
-    "registration_cancelled" => :registration_cancelled_enabled
+    "registration_cancelled" => :registration_cancelled_enabled,
+    "event_cancelled" => :event_cancelled_enabled
   }.freeze
 
   validates :registration_confirmed_enabled, inclusion: { in: [true, false] }
   validates :registration_cancelled_enabled, inclusion: { in: [true, false] }
+  validates :event_cancelled_enabled, inclusion: { in: [true, false] }
 
   def self.api_json(record)
     {
       "registration_confirmed_enabled" => record.nil? || record.registration_confirmed_enabled,
-      "registration_cancelled_enabled" => record.nil? || record.registration_cancelled_enabled
+      "registration_cancelled_enabled" => record.nil? || record.registration_cancelled_enabled,
+      "event_cancelled_enabled" => record.nil? || record.event_cancelled_enabled
     }
   end
 

@@ -22,8 +22,7 @@ module Registrations
           raise EventStarted if event.starts_at <= Time.current
           ensure_reserved_spot!(event, registration)
 
-          registration.lifecycle_version += 1
-          registration.cancel!
+          Registrations::Cancellation.apply!(registration, by: "participant")
           event.update!(reserved_spots: event.reserved_spots - 1)
           OutboxEvent.record!(
             event_type: "RegistrationCancelled",

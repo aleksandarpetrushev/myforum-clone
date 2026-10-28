@@ -109,3 +109,42 @@ describe('RegistrationsComponent hidden events', () => {
     button.click();
   }
 });
+
+describe('RegistrationsComponent cancelled events', () => {
+  let fixture: ComponentFixture<RegistrationsComponent>;
+  let http: HttpTestingController;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [RegistrationsComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(RegistrationsComponent);
+    http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => http.verify());
+
+  const event = { id: 6, title: 'Forum session 6: Energy', starts_at: '2026-11-23T09:00:00.000Z', location: 'Online' };
+
+  it('shows Event cancelled from the event status, before the job reaches the registration', () => {
+    http.expectOne('http://localhost:3000/api/me/registrations').flush({
+      data: [{ id: 9, status: 'confirmed', cancelled_by: null, event_id: 6, event: { ...event, status: 'cancelled' } }],
+    });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Event cancelled by the organizer');
+    expect(fixture.nativeElement.textContent).not.toContain('Cancel registration');
+  });
+
+  it('shows Cancelled by the organizer once the registration is cancelled', () => {
+    http.expectOne('http://localhost:3000/api/me/registrations').flush({
+      data: [{ id: 9, status: 'cancelled', cancelled_by: 'organizer', event_id: 6, event: null }],
+    });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Cancelled by the organizer');
+  });
+});

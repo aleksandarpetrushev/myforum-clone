@@ -37,4 +37,4 @@ en:
             ends_at:
               ends_before_start: "must be after starts_at"
             status:
-              cannot_return_to_draft: "cannot go back to draft once published"
+              invalid_transition: "cannot change from its current status that way"

@@ -15,7 +15,14 @@
       }
     </h2>
     <p class="muted">
-      {{ registration.status }}
+      <!-- The event's status wins: the registration may still read confirmed until the cancellation job reaches it. -->
+      @if (registration.event?.status === 'cancelled') {
+        <strong class="error">Event cancelled by the organizer</strong>
+      } @else if (registration.cancelled_by === 'organizer') {
+        <strong class="error">Cancelled by the organizer</strong>
+      } @else {
+        {{ registration.status }}
+      }
       @if (registration.event) {
         · {{ registration.event.starts_at }} · {{ registration.event.location }}
       }
@@ -30,7 +37,7 @@
       }
       <button type="button" (click)="confirmCancel(registration)" [disabled]="cancellingId() !== null">Confirm cancel</button>
       <button type="button" class="secondary" (click)="dismissConfirm()" [disabled]="cancellingId() !== null">Keep registration</button>
-    } @else if (registration.status === 'confirmed') {
+    } @else if (registration.status === 'confirmed' && registration.event?.status !== 'cancelled') {
       <button type="button" (click)="askCancel(registration)" [disabled]="cancellingId() !== null">Cancel registration</button>
     }
   </article>

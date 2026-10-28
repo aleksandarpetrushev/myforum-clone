@@ -64,3 +64,15 @@
     (change)="setPreference('registration_cancelled_enabled', $any($event.target).checked)"
   />
 </label>
+<label class="preference">
+  <span>
+    <strong>Event cancellations</strong>
+    Notify me when an organizer cancels an event I registered for
+  </span>
+  <input
+    type="checkbox"
+    [checked]="preferences()?.event_cancelled_enabled"
+    [disabled]="savingPreference() || !preferences()"
+    (change)="setPreference('event_cancelled_enabled', $any($event.target).checked)"
+  />
+</label>

@@ -104,7 +104,8 @@ RSpec.describe "notification center", type: :request do
     expect(response).to have_http_status(:ok)
     expect(json_body).to eq(
       "registration_confirmed_enabled" => true,
-      "registration_cancelled_enabled" => true
+      "registration_cancelled_enabled" => true,
+      "event_cancelled_enabled" => true
     )
     expect(NotificationPreference.count).to eq(0)
 
@@ -115,6 +116,17 @@ RSpec.describe "notification center", type: :request do
     expect(response).to have_http_status(:ok)
     expect(json_body["registration_confirmed_enabled"]).to be(false)
     expect(json_body["registration_cancelled_enabled"]).to be(true)
+    expect(json_body["event_cancelled_enabled"]).to be(true)
     expect(user.reload.notification_preference.registration_confirmed_enabled).to be(false)
+  end
+
+  it "stores the event cancelled switch" do
+    patch "/api/me/notification_preferences",
+          params: { notification_preference: { event_cancelled_enabled: false } },
+          headers: auth_headers(user)
+
+    expect(response).to have_http_status(:ok)
+    expect(json_body["event_cancelled_enabled"]).to be(false)
+    expect(user.reload.notification_preference.event_cancelled_enabled).to be(false)
   end
 end

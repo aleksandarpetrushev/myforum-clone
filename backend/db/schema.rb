@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_21_220000) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_28_100200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_trgm"
   enable_extension "plpgsql"
@@ -69,6 +69,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_21_220000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "visibility", default: "public", null: false
+    t.datetime "cancelled_at"
     t.index ["description"], name: "index_events_on_description_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["location"], name: "index_events_on_location"
     t.index ["organization_id"], name: "index_events_on_organization_id"
@@ -89,6 +90,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_21_220000) do
     t.boolean "registration_cancelled_enabled", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "event_cancelled_enabled", default: true, null: false
     t.index ["user_id"], name: "index_notification_preferences_on_user_id", unique: true
   end
 
@@ -151,9 +153,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_21_220000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "lifecycle_version", default: 1, null: false
+    t.string "cancelled_by"
     t.index ["event_id"], name: "index_registrations_on_event_id"
     t.index ["user_id", "event_id"], name: "index_registrations_on_user_id_and_event_id", unique: true
     t.index ["user_id"], name: "index_registrations_on_user_id"
+    t.check_constraint "cancelled_by IS NULL OR (cancelled_by::text = ANY (ARRAY['participant'::character varying, 'organizer'::character varying]::text[]))", name: "registrations_cancelled_by_valid"
     t.check_constraint "status::text = ANY (ARRAY['confirmed'::character varying, 'cancelled'::character varying, 'failed'::character varying]::text[])", name: "registrations_status_valid"
   end
 

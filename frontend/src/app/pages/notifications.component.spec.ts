@@ -36,6 +36,7 @@ describe('NotificationsComponent', () => {
     http.expectOne('http://localhost:3000/api/me/notification_preferences').flush({
       registration_confirmed_enabled: true,
       registration_cancelled_enabled: true,
+      event_cancelled_enabled: true,
     });
     http.expectOne('http://localhost:3000/api/me/notifications').flush({
       data: [unread, read],
@@ -116,9 +117,25 @@ describe('NotificationsComponent', () => {
     request.flush({
       registration_confirmed_enabled: false,
       registration_cancelled_enabled: true,
+      event_cancelled_enabled: true,
     });
     fixture.detectChanges();
     expect(checkbox.checked).toBe(false);
+  });
+
+  it('saves the event cancellations switch', () => {
+    const label = [...fixture.nativeElement.querySelectorAll('label.preference')].find((element: HTMLElement) =>
+      element.textContent?.includes('Event cancellations'),
+    ) as HTMLElement;
+    const checkbox = label.querySelector('input') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+
+    const request = http.expectOne('http://localhost:3000/api/me/notification_preferences');
+    expect(request.request.body.notification_preference.event_cancelled_enabled).toBe(false);
+    request.flush({ registration_confirmed_enabled: true, registration_cancelled_enabled: true, event_cancelled_enabled: false });
   });
 
   function buttonNamed(name: string): HTMLButtonElement {

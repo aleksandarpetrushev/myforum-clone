@@ -8,6 +8,7 @@ module Api
     rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
     rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
     rescue_from ActiveRecord::RecordInvalid, with: :render_validation_failed
+    rescue_from StateMachines::InvalidTransition, with: :render_validation_failed
     rescue_from Events::Register::EventFull, with: :render_event_full
 
     private
@@ -32,13 +33,15 @@ module Api
       render_error(code: "forbidden", message: "You are not allowed to perform this action", status: :forbidden)
     end
 
+    # ActiveRecord::RecordInvalid carries the model as record; StateMachines::InvalidTransition as object.
     def render_validation_failed(exception)
+      model = exception.respond_to?(:record) ? exception.record : exception.object
       render_error(
         code: "validation_failed",
         message: "Validation failed",
         status: :unprocessable_entity,
-        details: exception.record.errors.to_hash,
-        reasons: exception.record.errors.details
+        details: model.errors.to_hash,
+        reasons: model.errors.details
       )
     end
 

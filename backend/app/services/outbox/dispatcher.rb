@@ -5,6 +5,9 @@ module Outbox
       when "RegistrationCreated", "RegistrationCancelled"
         SendNotificationJob.perform_later(event.id)
         RecordAnalyticsJob.perform_later(event.id)
+      when "EventCancelled"
+        CancelEventRegistrationsJob.perform_later(event.aggregate_id)
+        RecordAnalyticsJob.perform_later(event.id)
       when "EventUpdated", "TopicFollowed", "TopicUnfollowed"
         RecordAnalyticsJob.perform_later(event.id)
       end

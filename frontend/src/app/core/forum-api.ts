@@ -39,6 +39,10 @@ export class ForumApi {
     return this.http.post<EventSummary>(`${API_URL}/api/events`, { event: body });
   }
 
+  cancelEvent(id: number): Observable<EventSummary> {
+    return this.http.post<EventSummary>(`${API_URL}/api/events/${id}/cancel`, {});
+  }
+
   adminOrganizations(): Observable<{ data: Organization[] }> {
     return this.http.get<{ data: Organization[] }>(`${API_URL}/api/me/organizations`);
   }
