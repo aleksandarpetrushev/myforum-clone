@@ -10,6 +10,14 @@ module Api
       render json: Events::Cache.fetch_detail(event.id)
     end
 
+    def create
+      event = Event.new(organization_id: create_params[:organization_id])
+      authorize event
+      created = Events::Create.new(organization: event.organization, attributes: create_params.except(:organization_id)).call
+      render json: created.as_detail_json.merge("allowed_organization_ids" => created.allowed_organization_ids),
+             status: :created
+    end
+
     def update
       event = policy_scope(Event).find(params[:id])
       authorize event
@@ -70,6 +78,14 @@ module Api
 
     def event_params
       params.require(:event).permit(:title, :description, :starts_at, :ends_at, :location, :kind, :capacity, :status, :visibility, allowed_organization_ids: [])
+    end
+
+    # Separate from event_params: create also takes the organization and topics, and its status rules differ.
+    def create_params
+      params.require(:event).permit(
+        :organization_id, :title, :description, :starts_at, :ends_at, :location, :kind, :capacity, :status, :visibility,
+        allowed_organization_ids: [], topic_ids: []
+      )
     end
   end
 end

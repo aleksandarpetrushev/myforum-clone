@@ -37,7 +37,8 @@ module Api
         code: "validation_failed",
         message: "Validation failed",
         status: :unprocessable_entity,
-        details: exception.record.errors.to_hash
+        details: exception.record.errors.to_hash,
+        reasons: exception.record.errors.details
       )
     end
 
@@ -46,9 +47,11 @@ module Api
       render_error(code: "event_full", message: "This event has reached capacity.", status: :conflict)
     end
 
-    def render_error(code:, message:, status:, details: nil)
+    # details carries human-readable messages per field; reasons carries the stable error types clients can match on.
+    def render_error(code:, message:, status:, details: nil, reasons: nil)
       body = { "code" => code, "message" => message }
       body["details"] = details if details
+      body["reasons"] = reasons if reasons
       render json: { "error" => body }, status: status
     end
 

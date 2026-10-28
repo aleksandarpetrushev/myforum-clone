@@ -1,4 +1,7 @@
 <h1>Upcoming events</h1>
+@if (adminOrganizations.canCreate()) {
+  <p><a class="button" routerLink="/events/new">Create event</a></p>
+}
 <form [formGroup]="form">
   <label>
     Search

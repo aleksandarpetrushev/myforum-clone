@@ -1,7 +1,17 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { EventSummary, NotificationItem, NotificationPage, NotificationPreferences, Registration, Session, Topic } from './models';
+import {
+  CreateEventRequest,
+  EventSummary,
+  NotificationItem,
+  NotificationPage,
+  NotificationPreferences,
+  Organization,
+  Registration,
+  Session,
+  Topic,
+} from './models';
 
 export const API_URL = 'http://localhost:3000';
 
@@ -23,6 +33,18 @@ export class ForumApi {
 
   event(id: number): Observable<EventSummary> {
     return this.http.get<EventSummary>(`${API_URL}/api/events/${id}`);
+  }
+
+  createEvent(body: CreateEventRequest): Observable<EventSummary> {
+    return this.http.post<EventSummary>(`${API_URL}/api/events`, { event: body });
+  }
+
+  adminOrganizations(): Observable<{ data: Organization[] }> {
+    return this.http.get<{ data: Organization[] }>(`${API_URL}/api/me/organizations`);
+  }
+
+  organizations(): Observable<{ data: Organization[] }> {
+    return this.http.get<{ data: Organization[] }>(`${API_URL}/api/organizations`);
   }
 
   register(eventId: number): Observable<Registration> {

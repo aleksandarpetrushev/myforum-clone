@@ -14,4 +14,10 @@ class OutboxEvent < ApplicationRecord
   rescue ActiveRecord::RecordNotUnique
     find_by!(idempotency_key: attrs[:idempotency_key] || attrs["idempotency_key"])
   end
+
+  # For facts that happen once per aggregate, such as EventPublished: a repeated key returns the existing row.
+  # Keys that must be unique per change keep using record!, so a collision fails loudly instead of dropping data.
+  def self.record_once!(attrs)
+    find_by(idempotency_key: attrs[:idempotency_key] || attrs["idempotency_key"]) || record!(attrs)
+  end
 end

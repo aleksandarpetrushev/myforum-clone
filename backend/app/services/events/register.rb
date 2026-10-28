@@ -13,6 +13,9 @@ module Events
 
       ApplicationRecord.transaction do
         event = Event.lock.includes(:topics).find(@event.id)
+        # Only published events take registrations; anything else looks the same as an event the caller cannot see.
+        raise ActiveRecord::RecordNotFound unless event.status == "published"
+
         registration = event.registrations.lock.find_by(user_id: @user.id)
 
         if registration.nil?

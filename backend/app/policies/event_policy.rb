@@ -6,12 +6,18 @@ class EventPolicy
     @event = event
   end
 
+  # A draft is visible only to the organizing organization's admins, including by direct link.
   def show?
     return false unless user
-    return true if public_event?
     return true if admin_of_organizer?
+    return false unless published?
+    return true if public_event?
 
     member_of_allowed_organization?
+  end
+
+  def create?
+    admin_of_organizer?
   end
 
   def update?
@@ -32,16 +38,21 @@ class EventPolicy
       return scope.none unless user
 
       scope.where(<<~SQL.squish, user.id, user.id)
-        events.visibility = 'public'
-        OR (
-          events.visibility = 'organization_restricted'
-          AND EXISTS (
-            SELECT 1
-            FROM event_allowed_organizations eao
-            INNER JOIN organization_memberships om
-              ON om.organization_id = eao.organization_id
-             AND om.user_id = ?
-            WHERE eao.event_id = events.id
+        (
+          events.status = 'published'
+          AND (
+            events.visibility = 'public'
+            OR (
+              events.visibility = 'organization_restricted'
+              AND EXISTS (
+                SELECT 1
+                FROM event_allowed_organizations eao
+                INNER JOIN organization_memberships om
+                  ON om.organization_id = eao.organization_id
+                 AND om.user_id = ?
+                WHERE eao.event_id = events.id
+              )
+            )
           )
         )
         OR EXISTS (
@@ -60,6 +71,10 @@ class EventPolicy
   end
 
   private
+
+  def published?
+    event.status == "published"
+  end
 
   def public_event?
     event.visibility.blank? || event.visibility == "public"

@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { catchError, debounceTime, of, startWith, switchMap, tap } from 'rxjs';
+import { AdminOrganizationsService } from '../core/admin-organizations.service';
 import { EventSummary, Topic } from '../core/models';
 import { ForumApi } from '../core/forum-api';
 
@@ -15,6 +16,7 @@ export class DiscoveryComponent {
   private readonly api = inject(ForumApi);
   private readonly forms = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
+  readonly adminOrganizations = inject(AdminOrganizationsService);
 
   readonly events = signal<EventSummary[]>([]);
   readonly topics = signal<Topic[]>([]);
@@ -27,6 +29,8 @@ export class DiscoveryComponent {
   });
 
   constructor() {
+    this.adminOrganizations.ensureLoaded();
+
     this.api.topics().pipe(takeUntilDestroyed()).subscribe({
       next: (response) => this.topics.set(response.data),
       error: () => this.error.set('Could not load topics'),

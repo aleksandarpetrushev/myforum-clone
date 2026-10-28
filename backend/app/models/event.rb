@@ -12,7 +12,7 @@ class Event < ApplicationRecord
   has_many :event_allowed_organizations, dependent: :destroy
   has_many :allowed_organizations, through: :event_allowed_organizations, source: :organization
 
-  validates :title, :description, :location, presence: true
+  validates :title, :description, :location, :starts_at, :ends_at, presence: true
   validates :kind, inclusion: { in: KINDS }
   validates :status, inclusion: { in: STATUSES }
   validates :visibility, inclusion: { in: VISIBILITIES }
@@ -20,6 +20,7 @@ class Event < ApplicationRecord
   validates :reserved_spots, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validate :ends_after_start
   validate :spots_within_capacity
+  validate :published_stays_published
 
   after_commit :invalidate_event_caches, on: %i[create update destroy]
 
@@ -82,7 +83,16 @@ class Event < ApplicationRecord
 
   def ends_after_start
     return if starts_at.blank? || ends_at.blank?
-    errors.add(:ends_at, "must be after starts_at") if ends_at <= starts_at
+    errors.add(:ends_at, :ends_before_start) if ends_at <= starts_at
+  end
+
+  # Once an event leaves draft (published, or published then cancelled) it can never be a draft again.
+  def published_stays_published
+    # A new record's status_was is the column default ("published"), so only saved events are checked.
+    return if new_record?
+    return unless status_changed? && status == "draft" && status_was != "draft"
+
+    errors.add(:status, :cannot_return_to_draft)
   end
 
   def spots_within_capacity

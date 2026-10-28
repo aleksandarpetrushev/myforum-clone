@@ -41,6 +41,39 @@ func TestMemoryApplyIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestEventPublishedAddsTheEventToCandidates(t *testing.T) {
+	memory := NewMemory()
+	incoming := Incoming{
+		IdempotencyKey: "event_published:7",
+		EventType:      "EventPublished",
+		Payload: map[string]any{
+			"event": map[string]any{
+				"id":             float64(7),
+				"title":          "Financing the energy transition",
+				"location":       "Geneva",
+				"starts_at":      time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339),
+				"status":         "published",
+				"reserved_spots": float64(0),
+				"capacity":       float64(80),
+				"topic_ids":      []any{float64(5)},
+				"visibility":     "public",
+			},
+		},
+	}
+
+	if err := memory.Apply(context.Background(), incoming); err != nil {
+		t.Fatal(err)
+	}
+
+	events, _, err := memory.Candidates(context.Background(), 1, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].ID != 7 {
+		t.Fatalf("expected event 7 as the only candidate, got %+v", events)
+	}
+}
+
 func TestRegistrationCancelledUpdatesReservedSpots(t *testing.T) {
 	memory := NewMemory()
 	startsAt := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)

@@ -7,4 +7,9 @@ class Organization < ApplicationRecord
 
   validates :name, :slug, presence: true
   validates :slug, uniqueness: true
+
+  # The id and name pair used by organization pickers.
+  def as_option_json
+    { "id" => id, "name" => name }
+  end
 end

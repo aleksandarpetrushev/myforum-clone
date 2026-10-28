@@ -1,0 +1,121 @@
+<h1>Create event</h1>
+
+@if (!adminOrganizations.loaded()) {
+  <p class="muted">Loading your organizations…</p>
+} @else if (!adminOrganizations.canCreate()) {
+  <p class="muted">Only organization admins can create events.</p>
+} @else {
+  <form [formGroup]="form" (ngSubmit)="submit('published')">
+    <label>
+      Organization
+      <select formControlName="organizationId">
+        @for (organization of adminOrganizations.organizations(); track organization.id) {
+          <option [ngValue]="organization.id">{{ organization.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label>
+      Title
+      <input formControlName="title" />
+      @for (message of errorsFor('title'); track message) {
+        <span class="error">Title {{ message }}</span>
+      }
+    </label>
+
+    <label>
+      Description
+      <textarea formControlName="description" rows="4"></textarea>
+      @for (message of errorsFor('description'); track message) {
+        <span class="error">Description {{ message }}</span>
+      }
+    </label>
+
+    <label>
+      Location
+      <input formControlName="location" placeholder="Geneva" />
+    </label>
+
+    <label>
+      Format
+      <select formControlName="kind">
+        <option value="in_person">In person</option>
+        <option value="online">Online</option>
+      </select>
+    </label>
+
+    <label>
+      Capacity
+      <input type="number" min="1" formControlName="capacity" />
+      @for (message of errorsFor('capacity'); track message) {
+        <span class="error">Capacity {{ message }}</span>
+      }
+    </label>
+
+    <label>
+      Starts
+      <input type="datetime-local" formControlName="startsAt" />
+    </label>
+
+    <label>
+      Ends
+      <input type="datetime-local" formControlName="endsAt" />
+      @for (message of errorsFor('ends_at'); track message) {
+        <span class="error">End time {{ message }}</span>
+      }
+    </label>
+
+    <fieldset>
+      <legend>Topics</legend>
+      @for (topic of topics(); track topic.id) {
+        <label>
+          <span>
+            <input type="checkbox" [checked]="selectedTopicIds().has(topic.id)" (change)="toggleTopic(topic.id)" />
+            {{ topic.name }}
+          </span>
+        </label>
+      }
+      @for (message of errorsFor('topic_ids'); track message) {
+        <span class="error">Topics {{ message }}</span>
+      }
+    </fieldset>
+
+    <label>
+      Who can see it
+      <select formControlName="visibility">
+        <option value="public">Everyone signed in</option>
+        <option value="organization_restricted">Only chosen organizations</option>
+      </select>
+    </label>
+
+    @if (visibility() === 'organization_restricted') {
+      <fieldset>
+        <legend>Allowed organizations</legend>
+        @for (organization of allOrganizations(); track organization.id) {
+          <label>
+            <span>
+              <input
+                type="checkbox"
+                [checked]="selectedAllowedIds().has(organization.id)"
+                (change)="toggleAllowed(organization.id)"
+              />
+              {{ organization.name }}
+            </span>
+          </label>
+        }
+        @for (message of errorsFor('allowed_organization_ids'); track message) {
+          <span class="error">Allowed organizations {{ message }}</span>
+        }
+      </fieldset>
+    }
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+
+    <p>
+      <button type="submit" [disabled]="submitting()">{{ submitting() ? 'Creating...' : 'Publish event' }}</button>
+      <button type="button" class="secondary" [disabled]="submitting()" (click)="submit('draft')">Save as draft</button>
+    </p>
+  </form>
+}

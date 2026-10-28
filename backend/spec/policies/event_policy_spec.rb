@@ -38,6 +38,20 @@ RSpec.describe EventPolicy do
     expect(described_class.new(member, event).update?).to be(false)
   end
 
+  it "allows only an organizer admin to create" do
+    expect(described_class.new(admin, Event.new(organization: organization)).create?).to be(true)
+    expect(described_class.new(member, Event.new(organization: organization)).create?).to be(false)
+  end
+
+  it "shows a draft only to the organizer's admins" do
+    event.update_column(:status, "draft")
+
+    expect(described_class.new(admin, event).show?).to be(true)
+    expect(described_class.new(member, event).show?).to be(false)
+    expect(EventPolicy::Scope.new(admin, Event.all).resolve).to include(event)
+    expect(EventPolicy::Scope.new(member, Event.all).resolve).not_to include(event)
+  end
+
   describe "organization_restricted events" do
     let(:other) { Organization.create!(name: "Other", slug: "other-policy") }
     let(:third) { Organization.create!(name: "Third", slug: "third-policy") }

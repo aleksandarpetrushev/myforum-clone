@@ -31,6 +31,36 @@ export interface EventSummary {
   topics: Topic[];
   description?: string;
   speakers?: { id: number; name: string; title: string | null }[];
+  visibility?: EventVisibility;
+  allowed_organization_ids?: number[];
+}
+
+export type EventVisibility = 'public' | 'organization_restricted';
+
+export interface Organization {
+  id: number;
+  name: string;
+}
+
+export interface CreateEventRequest {
+  organization_id: number;
+  title: string;
+  description: string;
+  location: string;
+  kind: 'online' | 'in_person';
+  capacity: number;
+  starts_at: string;
+  ends_at: string;
+  status: 'draft' | 'published';
+  visibility: EventVisibility;
+  allowed_organization_ids: number[];
+  topic_ids: number[];
+}
+
+export interface ValidationError {
+  code: string;
+  message: string;
+  details?: Record<string, string[]>;
 }
 
 export interface Registration {

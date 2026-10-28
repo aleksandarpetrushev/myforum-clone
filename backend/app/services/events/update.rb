@@ -7,9 +7,11 @@ module Events
 
     def call
       allowed_ids = extract_allowed_ids
+      validate_allowed_organizations!(allowed_ids)
+      was_published = @event.status == "published"
       ApplicationRecord.transaction do
         @event.update!(@attributes) if @attributes.present?
-        replace_allowed_organizations(allowed_ids) unless allowed_ids.nil?
+        Events::AllowedOrganizations.replace(@event, allowed_ids) unless allowed_ids.nil?
         @event.touch if allowed_ids && @attributes.blank?
         OutboxEvent.record!(
           event_type: "EventUpdated",
@@ -18,6 +20,7 @@ module Events
           idempotency_key: "event_updated:#{@event.id}:#{@event.reload.updated_at.to_i}",
           payload: { "event" => @event.snapshot }
         )
+        Events::Publication.record!(@event) if !was_published && @event.status == "published"
       end
 
       Events::Cache.invalidate(@event.id)
@@ -33,11 +36,11 @@ module Events
       Array(@attributes.delete("allowed_organization_ids")).map(&:to_i).uniq
     end
 
-    def replace_allowed_organizations(organization_ids)
-      @event.event_allowed_organizations.destroy_all
-      organization_ids.each do |organization_id|
-        @event.event_allowed_organizations.create!(organization_id: organization_id)
-      end
+    # Judges the list the event will end up with: the ids sent, or the current ones when none were sent.
+    def validate_allowed_organizations!(allowed_ids)
+      visibility = @attributes.fetch("visibility", @event.visibility)
+      Events::AllowedOrganizations.validate(@event, allowed_ids || @event.allowed_organization_ids, visibility: visibility)
+      raise ActiveRecord::RecordInvalid, @event if @event.errors.any?
     end
   end
 end

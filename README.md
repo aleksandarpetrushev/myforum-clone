@@ -78,7 +78,11 @@ The seed creates 8 organizations, 15 topics, 100 events, speakers, follows, and 
 - `GET /api/events/:id`
 - `POST /api/registrations` with `event_id` registers the current user
 - `POST /api/registrations/cancel` with `event_id` cancels that registration, including after the caller can no longer view the event
-- `PATCH /api/events/:id` for an organizer admin
+- `POST /api/events` for an organizer admin creates a `draft` (the default) or `published` event and returns `201` with its details. Drafts are visible only to the organizer's admins. Publishing, on create or later through `PATCH`, writes one `EventPublished` outbox row.
+- `PATCH /api/events/:id` for an organizer admin. A published event cannot go back to draft.
+- `GET /api/me/organizations` returns the organizations the caller administers
+- `GET /api/organizations` lists every organization, for organization admins only
+- Validation failures return `422` with `error.details` (messages per field) and `error.reasons` (error types per field)
 - `GET /api/topics`
 - `POST /api/topics/:id/follow`
 - `DELETE /api/topics/:id/follow`

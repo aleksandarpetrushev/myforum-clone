@@ -55,7 +55,8 @@ RSpec.describe Events::Cache do
     expect(upcoming_ids(user)).to include(restricted.id)
 
     before_epoch = described_class.list_epoch
-    Events::Update.new(event: restricted, attributes: { "allowed_organization_ids" => [] }).call
+    # A restricted event needs at least one allowed organization, so swap the partner for the organizer.
+    Events::Update.new(event: restricted, attributes: { "allowed_organization_ids" => [organization.id] }).call
     expect(described_class.list_epoch).to be > before_epoch
     expect(upcoming_ids(user)).not_to include(restricted.id)
   end
