@@ -69,7 +69,13 @@ export interface Registration {
   status: string;
   cancelled_by?: 'participant' | 'organizer' | null;
   event_id: number;
-  event?: { id: number; title: string; starts_at: string; location: string; status?: string } | null;
+  event?: { id: number; title: string; starts_at: string; ends_at?: string; location: string; status?: string } | null;
+}
+
+// Upcoming soonest first, Past most recent first; the server decides the split and the order.
+export interface MyRegistrations {
+  upcoming: Registration[];
+  past: Registration[];
 }
 
 export interface NotificationItem {

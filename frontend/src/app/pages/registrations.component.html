@@ -5,40 +5,60 @@
 @if (notice()) {
   <p>{{ notice() }}</p>
 }
-@for (registration of registrations(); track registration.id) {
+
+<section>
+  <h2>Upcoming</h2>
+  @for (registration of upcoming(); track registration.id) {
+    <ng-container *ngTemplateOutlet="card; context: { $implicit: registration, upcoming: true }" />
+  } @empty {
+    <p class="muted">No upcoming events</p>
+  }
+</section>
+
+<section>
+  <h2>Past</h2>
+  @for (registration of past(); track registration.id) {
+    <ng-container *ngTemplateOutlet="card; context: { $implicit: registration, upcoming: false }" />
+  } @empty {
+    <p class="muted">No past events</p>
+  }
+</section>
+
+<ng-template #card let-registration let-upcoming="upcoming">
   <article class="card">
-    <h2>
+    <h3>
       @if (registration.event) {
         <a [routerLink]="['/events', registration.event.id]">{{ registration.event.title }}</a>
       } @else {
         Registration
       }
-    </h2>
+    </h3>
     <p class="muted">
-      <!-- The event's status wins: the registration may still read confirmed until the cancellation job reaches it. -->
-      @if (registration.event?.status === 'cancelled') {
-        <strong class="error">Event cancelled by the organizer</strong>
-      } @else if (registration.cancelled_by === 'organizer') {
-        <strong class="error">Cancelled by the organizer</strong>
-      } @else {
-        {{ registration.status }}
+      @if (!upcoming && pastLabel(registration); as label) {
+        <strong class="error">{{ label }}</strong> ·
+      }
+      @if (upcoming && happeningNow(registration)) {
+        <strong>Happening now</strong> ·
       }
       @if (registration.event) {
-        · {{ registration.event.starts_at }} · {{ registration.event.location }}
+        {{ registration.event.starts_at }} · {{ registration.event.location }}
       }
     </p>
-    @if (cancellingId() === registration.id) {
-      <p>Cancelling…</p>
-    } @else if (confirmingId() === registration.id) {
-      @if (registration.event) {
-        <p>Cancel your registration for {{ registration.event.title }}?</p>
+    <!-- The server refuses to cancel once an event has started. -->
+    @if (upcoming && !happeningNow(registration)) {
+      @if (cancellingId() === registration.id) {
+        <p>Cancelling…</p>
+      } @else if (confirmingId() === registration.id) {
+        @if (registration.event) {
+          <p>Cancel your registration for {{ registration.event.title }}?</p>
+        } @else {
+          <p>Cancel this registration?</p>
+        }
+        <button type="button" (click)="confirmCancel(registration)" [disabled]="cancellingId() !== null">Confirm cancel</button>
+        <button type="button" class="secondary" (click)="dismissConfirm()" [disabled]="cancellingId() !== null">Keep registration</button>
       } @else {
-        <p>Cancel this registration?</p>
+        <button type="button" (click)="askCancel(registration)" [disabled]="cancellingId() !== null">Cancel registration</button>
       }
-      <button type="button" (click)="confirmCancel(registration)" [disabled]="cancellingId() !== null">Confirm cancel</button>
-      <button type="button" class="secondary" (click)="dismissConfirm()" [disabled]="cancellingId() !== null">Keep registration</button>
-    } @else if (registration.status === 'confirmed' && registration.event?.status !== 'cancelled') {
-      <button type="button" (click)="askCancel(registration)" [disabled]="cancellingId() !== null">Cancel registration</button>
     }
   </article>
-}
+</ng-template>

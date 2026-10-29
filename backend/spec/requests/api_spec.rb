@@ -236,7 +236,7 @@ RSpec.describe "API", type: :request do
       ActiveSupport::Notifications.unsubscribe(subscriber)
 
       expect(queries.count { |sql| sql.include?("organization_memberships") }).to eq(1)
-      rows = json_body["data"].index_by { |row| row["event_id"] }
+      rows = (json_body["upcoming"] + json_body["past"]).index_by { |row| row["event_id"] }
       expect(rows[visible.id]).to have_key("event")
       expect(rows[visible.id]["event"]["title"]).to eq(visible.title)
       hidden.each do |created|
@@ -260,9 +260,9 @@ RSpec.describe "API", type: :request do
       expect(response).to have_http_status(:not_found)
 
       get "/api/me/registrations", headers: auth_headers(member)
-      expect(json_body["data"].map { |row| row["event_id"] }).to eq([restricted.id])
-      expect(json_body.dig("data", 0, "status")).to eq("confirmed")
-      expect(json_body.dig("data", 0)).not_to have_key("event")
+      expect(json_body["upcoming"].map { |row| row["event_id"] }).to eq([restricted.id])
+      expect(json_body.dig("upcoming", 0, "status")).to eq("confirmed")
+      expect(json_body.dig("upcoming", 0)).not_to have_key("event")
       expect(response.body).not_to include(restricted.title)
       expect(response.body).not_to include(restricted.location)
 

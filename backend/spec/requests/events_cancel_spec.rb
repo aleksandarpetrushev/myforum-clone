@@ -143,7 +143,7 @@ RSpec.describe "Event cancellation", type: :request do
 
       get "/api/me/registrations", headers: auth_headers(registrant)
 
-      row = json_body["data"].find { |registration| registration["event_id"] == event.id }
+      row = json_body["past"].find { |registration| registration["event_id"] == event.id }
       expect(row).to include("status" => "cancelled", "cancelled_by" => "organizer")
       expect(row["event"]).to include("title" => "Climate finance session", "status" => "cancelled")
     end
