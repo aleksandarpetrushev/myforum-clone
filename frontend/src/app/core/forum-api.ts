@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import {
   CreateEventRequest,
   EventSummary,
+  MyRegistrations,
   NotificationItem,
   NotificationPage,
   NotificationPreferences,
@@ -71,8 +72,8 @@ export class ForumApi {
     return this.http.delete<void>(`${API_URL}/api/topics/${topicId}/follow`);
   }
 
-  registrations(): Observable<{ data: Registration[] }> {
-    return this.http.get<{ data: Registration[] }>(`${API_URL}/api/me/registrations`);
+  registrations(): Observable<MyRegistrations> {
+    return this.http.get<MyRegistrations>(`${API_URL}/api/me/registrations`);
   }
 
   notifications(cursor?: string | null): Observable<NotificationPage> {

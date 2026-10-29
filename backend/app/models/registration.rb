@@ -42,6 +42,7 @@ class Registration < ApplicationRecord
       "id" => event.id,
       "title" => event.title,
       "starts_at" => event.starts_at,
+      "ends_at" => event.ends_at,
       "location" => event.location,
       # Lets the client show "Event cancelled" before the cancellation job reaches this registration.
       "status" => event.status
