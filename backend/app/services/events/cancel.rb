@@ -18,6 +18,8 @@ module Events
         raise EventStarted if event.starts_at <= Time.current
 
         # A draft has no cancel transition, so this raises StateMachines::InvalidTransition (422).
+        # Every change to the event row takes the next revision, so Go can order this snapshot after earlier ones.
+        event.revision += 1
         event.cancel!
         OutboxEvent.record!(
           event_type: "EventCancelled",

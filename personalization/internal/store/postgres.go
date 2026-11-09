@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -69,6 +70,7 @@ func (p *Postgres) migrate(ctx context.Context) error {
 		);
 		ALTER TABLE personalization.events ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'public';
 		ALTER TABLE personalization.events ADD COLUMN IF NOT EXISTS organization_id bigint NOT NULL DEFAULT 0;
+		ALTER TABLE personalization.events ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 0;
 		CREATE TABLE IF NOT EXISTS personalization.event_allowed_organizations (
 			event_id bigint NOT NULL,
 			organization_id bigint NOT NULL,
@@ -123,41 +125,13 @@ func (p *Postgres) applyTx(ctx context.Context, tx *sql.Tx, incoming Incoming) e
 			return nil
 		}
 		event := eventFromSnapshot(snapshot)
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO personalization.events (id, title, location, starts_at, status, reserved_spots, capacity, visibility, organization_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (id) DO UPDATE SET
-				title = EXCLUDED.title,
-				location = EXCLUDED.location,
-				starts_at = EXCLUDED.starts_at,
-				status = EXCLUDED.status,
-				reserved_spots = EXCLUDED.reserved_spots,
-				capacity = EXCLUDED.capacity,
-				visibility = EXCLUDED.visibility,
-				organization_id = EXCLUDED.organization_id
-		`, event.ID, event.Title, event.Location, event.StartsAt, event.Status, event.ReservedSpots, event.Capacity, event.Visibility, event.OrganizerID); err != nil {
-			return fmt.Errorf("upsert event: %w", err)
+		applied, err := upsertEvent(ctx, tx, event)
+		if err != nil {
+			return err
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM personalization.event_topics WHERE event_id = $1`, event.ID); err != nil {
-			return fmt.Errorf("clear event topics: %w", err)
-		}
-		for _, topicID := range event.TopicIDs {
-			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO personalization.event_topics (event_id, topic_id) VALUES ($1, $2)
-				ON CONFLICT DO NOTHING
-			`, event.ID, topicID); err != nil {
-				return fmt.Errorf("insert event topic: %w", err)
-			}
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM personalization.event_allowed_organizations WHERE event_id = $1`, event.ID); err != nil {
-			return fmt.Errorf("clear allowed organizations: %w", err)
-		}
-		for _, organizationID := range event.AllowedOrganizationIDs {
-			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO personalization.event_allowed_organizations (event_id, organization_id) VALUES ($1, $2)
-				ON CONFLICT DO NOTHING
-			`, event.ID, organizationID); err != nil {
-				return fmt.Errorf("insert allowed organization: %w", err)
+		if applied {
+			if err := replaceEventLinks(ctx, tx, event); err != nil {
+				return err
 			}
 		}
 		if location, _ := incoming.Payload["user_location"].(string); location != "" {
@@ -295,4 +269,61 @@ func (p *Postgres) Candidates(ctx context.Context, userID int64, now time.Time) 
 	}
 	_ = p.db.QueryRowContext(ctx, `SELECT location FROM personalization.user_locations WHERE user_id = $1`, userID).Scan(&profile.Location)
 	return events, profile, nil
+}
+
+// upsertEvent stores a snapshot unless a newer one is already stored. Every change in Rails takes the next
+// revision, so an equal revision is the same state sent twice and applying it is harmless. A snapshot without a
+// revision (written before the deploy) applies as it did before and never lowers the stored revision.
+// Reports whether it was applied.
+func upsertEvent(ctx context.Context, tx *sql.Tx, event Event) (bool, error) {
+	var id int64
+	err := tx.QueryRowContext(ctx, `
+		INSERT INTO personalization.events (id, title, location, starts_at, status, reserved_spots, capacity, visibility, organization_id, revision)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (id) DO UPDATE SET
+			title = EXCLUDED.title,
+			location = EXCLUDED.location,
+			starts_at = EXCLUDED.starts_at,
+			status = EXCLUDED.status,
+			reserved_spots = EXCLUDED.reserved_spots,
+			capacity = EXCLUDED.capacity,
+			visibility = EXCLUDED.visibility,
+			organization_id = EXCLUDED.organization_id,
+			revision = GREATEST(personalization.events.revision, EXCLUDED.revision)
+		WHERE NOT $11 OR personalization.events.revision <= EXCLUDED.revision
+		RETURNING id
+	`, event.ID, event.Title, event.Location, event.StartsAt, event.Status, event.ReservedSpots, event.Capacity, event.Visibility, event.OrganizerID, event.Revision, event.HasRevision).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("upsert event: %w", err)
+	}
+	return true, nil
+}
+
+func replaceEventLinks(ctx context.Context, tx *sql.Tx, event Event) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM personalization.event_topics WHERE event_id = $1`, event.ID); err != nil {
+		return fmt.Errorf("clear event topics: %w", err)
+	}
+	for _, topicID := range event.TopicIDs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO personalization.event_topics (event_id, topic_id) VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`, event.ID, topicID); err != nil {
+			return fmt.Errorf("insert event topic: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM personalization.event_allowed_organizations WHERE event_id = $1`, event.ID); err != nil {
+		return fmt.Errorf("clear allowed organizations: %w", err)
+	}
+	for _, organizationID := range event.AllowedOrganizationIDs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO personalization.event_allowed_organizations (event_id, organization_id) VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`, event.ID, organizationID); err != nil {
+			return fmt.Errorf("insert allowed organization: %w", err)
+		}
+	}
+	return nil
 }

@@ -17,6 +17,11 @@ type Event struct {
 	Visibility             string
 	OrganizerID            int64
 	AllowedOrganizationIDs []int64
+	// Revision counts every change to the event row in Rails. A snapshot older than the stored one is ignored.
+	Revision int
+	// HasRevision is false for snapshots written before Rails sent revisions. They are applied as they were
+	// before (last to arrive wins) and never lower the stored revision.
+	HasRevision bool
 }
 
 type Membership struct {

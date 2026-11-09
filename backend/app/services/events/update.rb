@@ -7,23 +7,39 @@ module Events
 
     # Any status may be sent; the Event state machine decides whether the change is allowed. Cancelling is refused
     # here: it only happens through Events::Cancel (POST /api/events/:id/cancel).
+    #
+    # Saves to one event run one after the other (row lock), and each save that changes something gets the next
+    # revision, which keys its EventUpdated row. A save that changes nothing writes nothing and still succeeds;
+    # it is not validated, because a stored event is always valid and nothing about it changed.
     def call
       allowed_ids = extract_allowed_ids
-      validate_allowed_organizations!(allowed_ids)
-      was_published = @event.status == "published"
+      changed = false
+
       ApplicationRecord.transaction do
-        @event.update!(@attributes) if @attributes.present?
-        Events::AllowedOrganizations.replace(@event, allowed_ids) unless allowed_ids.nil?
-        @event.touch if allowed_ids && @attributes.blank?
-        OutboxEvent.record!(
+        @event.lock!
+        validate_allowed_organizations!(allowed_ids)
+        was_published = @event.status == "published"
+
+        @event.assign_attributes(@attributes)
+        organizations_changed = !allowed_ids.nil? && allowed_ids.sort != @event.allowed_organization_ids.sort
+        changed = @event.changed? || organizations_changed
+        next unless changed
+
+        @event.revision += 1
+        @event.save!
+        Events::AllowedOrganizations.replace(@event, allowed_ids) if organizations_changed
+        # create!, not record!: with the lock and the revision a repeated key cannot happen, so if one does it must
+        # fail loudly rather than return the earlier row and drop this change.
+        OutboxEvent.create!(
           event_type: "EventUpdated",
           aggregate_type: "Event",
           aggregate_id: @event.id,
-          idempotency_key: "event_updated:#{@event.id}:#{@event.reload.updated_at.to_i}",
-          payload: { "event" => @event.snapshot }
+          idempotency_key: "event_updated:#{@event.id}:#{@event.revision}",
+          payload: { "event" => @event.reload.snapshot }
         )
         Events::Publication.record!(@event) if !was_published && @event.status == "published"
       end
+      return @event unless changed
 
       Events::Cache.invalidate(@event.id)
       RebuildEventCacheJob.perform_later(@event.id)

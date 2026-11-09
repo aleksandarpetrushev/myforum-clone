@@ -67,7 +67,9 @@ class CancelEventRegistrationsJob < ApplicationJob
   # One statement, no model callbacks, then one cache invalidation, instead of one per registration.
   def recount_seats(event)
     confirmed = Registration.where(event_id: event.id, status: "confirmed").select("COUNT(*)")
-    Event.where(id: event.id).update_all(["reserved_spots = (#{confirmed.to_sql}), updated_at = ?", Time.current])
+    Event.where(id: event.id).update_all(
+      ["reserved_spots = (#{confirmed.to_sql}), revision = revision + 1, updated_at = ?", Time.current]
+    )
     Events::Cache.invalidate(event.id)
   end
 end

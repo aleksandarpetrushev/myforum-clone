@@ -23,7 +23,7 @@ module Registrations
           ensure_reserved_spot!(event, registration)
 
           Registrations::Cancellation.apply!(registration, by: "participant")
-          event.update!(reserved_spots: event.reserved_spots - 1)
+          event.update!(reserved_spots: event.reserved_spots - 1, revision: event.revision + 1)
           OutboxEvent.record!(
             event_type: "RegistrationCancelled",
             aggregate_type: "Registration",

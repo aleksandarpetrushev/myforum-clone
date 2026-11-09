@@ -46,8 +46,14 @@ func (m *Memory) Apply(_ context.Context, incoming Incoming) error {
 			break
 		}
 		event := eventFromSnapshot(snapshot)
-		m.events[event.ID] = event
-		m.topics[event.ID] = idSet(event.TopicIDs)
+		stored, ok := m.events[event.ID]
+		if !ok || !event.HasRevision || event.Revision >= stored.Revision {
+			if ok && !event.HasRevision {
+				event.Revision = stored.Revision
+			}
+			m.events[event.ID] = event
+			m.topics[event.ID] = idSet(event.TopicIDs)
+		}
 		if location, _ := incoming.Payload["user_location"].(string); location != "" {
 			if userID, ok := int64From(incoming.Payload["user_id"]); ok {
 				m.location[userID] = location
@@ -120,6 +126,7 @@ func eventFromSnapshot(snapshot map[string]any) Event {
 		visibility = "public"
 	}
 	organizerID, _ := int64From(snapshot["organization_id"])
+	_, hasRevision := snapshot["revision"]
 	return Event{
 		ID:                     id,
 		Title:                  stringFrom(snapshot["title"]),
@@ -132,6 +139,8 @@ func eventFromSnapshot(snapshot map[string]any) Event {
 		Visibility:             visibility,
 		OrganizerID:            organizerID,
 		AllowedOrganizationIDs: int64Slice(snapshot["allowed_organization_ids"]),
+		Revision:               intFrom(snapshot["revision"]),
+		HasRevision:            hasRevision,
 	}
 }
 
