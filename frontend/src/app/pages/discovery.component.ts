@@ -22,6 +22,8 @@ export class DiscoveryComponent {
   readonly topics = signal<Topic[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
+  readonly recommendations = signal<EventSummary[]>([]);
+  readonly recommendationsState = signal<'loading' | 'ready' | 'failed'>('loading');
   readonly form = this.forms.nonNullable.group({
     q: '',
     topicId: '',
@@ -34,6 +36,15 @@ export class DiscoveryComponent {
     this.api.topics().pipe(takeUntilDestroyed()).subscribe({
       next: (response) => this.topics.set(response.data),
       error: () => this.error.set('Could not load topics'),
+    });
+
+    // Independent of the event list: a slow or failing personalization service never delays it.
+    this.api.recommendations().pipe(takeUntilDestroyed()).subscribe({
+      next: (response) => {
+        this.recommendations.set(response.data);
+        this.recommendationsState.set('ready');
+      },
+      error: () => this.recommendationsState.set('failed'),
     });
 
     this.form.valueChanges

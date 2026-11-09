@@ -8,6 +8,9 @@ class Metrics
     registration_cancel_success_total
     registration_cancel_failure_total
     registration_cancel_invariant_violation_total
+    recommendations_fetched_total
+    recommendations_stale_total
+    recommendations_unavailable_total
   ].freeze
 
   LOCK = Mutex.new

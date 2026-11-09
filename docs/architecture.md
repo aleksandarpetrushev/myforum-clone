@@ -38,13 +38,14 @@ flowchart TB
   SPA -->|"JSON over HTTPS, Bearer token"| API
   API -->|"Reads and writes, SQL"| DB
   API -->|"Cache reads, epoch, enqueue jobs"| Redis
+  API -->|"GET /recommendations, 1 s timeout"| Go
   Worker -->|"Dequeues jobs"| Redis
   Worker -->|"Claims outbox rows, writes notifications and analytics, SQL"| DB
   Worker -->|"POST /internal/events, JSON"| Go
   Go -->|"Writes personalization schema, reads public events and memberships for eligibility, SQL"| DB
 ```
 
-Two couplings the picture makes visible. The Go service reads `public` tables directly to decide eligibility (ADR 0005), so a rename in Rails' schema can break it. `GET /recommendations` exists on the Go service, but nothing in the web app or Rails calls it yet.
+Two couplings the picture makes visible. The Go service reads `public` tables directly to decide eligibility (ADR 0005), so a rename in Rails' schema can break it. Rails calls `GET /recommendations` for `GET /api/me/recommendations` and filters every id Go returns through `EventPolicy` again (MF-201); the web app never calls Go.
 
 ## Responsibilities
 

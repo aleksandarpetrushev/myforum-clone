@@ -2,6 +2,28 @@
 @if (adminOrganizations.canCreate()) {
   <p><a class="button" routerLink="/events/new">Create event</a></p>
 }
+<section class="recommendations">
+  <h2>Recommended for you</h2>
+  @switch (recommendationsState()) {
+    @case ('loading') {
+      <p class="muted">Loading recommendations…</p>
+    }
+    @case ('failed') {
+      <p class="muted">Recommendations not available currently, try again later</p>
+    }
+    @default {
+      @for (event of recommendations(); track event.id) {
+        <article class="card">
+          <h3><a [routerLink]="['/events', event.id]">{{ event.title }}</a></h3>
+          <p class="muted">{{ event.starts_at }} · {{ event.location }}</p>
+        </article>
+      } @empty {
+        <p class="muted">No recommendations yet</p>
+      }
+    }
+  }
+</section>
+
 <form [formGroup]="form">
   <label>
     Search
