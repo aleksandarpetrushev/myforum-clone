@@ -17,6 +17,35 @@ flowchart LR
   Go --> ReadModel[(personalization schema)]
 ```
 
+## Containers (C4 level 2)
+
+Each box is a separately running process or datastore. Rails API and Sidekiq are one codebase started two ways.
+
+```mermaid
+flowchart TB
+  Participant(["Participant / organizer<br/>[Person]"])
+
+  subgraph MyForum["My Forum [software system]"]
+    SPA["Web app<br/>[Container: Angular, in the browser]<br/>Pages for events, registrations, notifications"]
+    API["Rails API<br/>[Container: Ruby on Rails, Puma]<br/>Auth, EventPolicy, workflows, writes the outbox"]
+    Worker["Background worker<br/>[Container: Sidekiq, same codebase]<br/>Polls the outbox: notifications, analytics, cancellations"]
+    Go["Personalization<br/>[Container: Go, net/http]<br/>Read model and ranking"]
+    DB[("Database<br/>[Container: PostgreSQL 16]<br/>public schema: system of record<br/>personalization schema: Go read model")]
+    Redis[("Cache and queues<br/>[Container: Redis 7]<br/>Event JSON cache, list epoch, Sidekiq queues")]
+  end
+
+  Participant -->|"Uses, HTTPS"| SPA
+  SPA -->|"JSON over HTTPS, Bearer token"| API
+  API -->|"Reads and writes, SQL"| DB
+  API -->|"Cache reads, epoch, enqueue jobs"| Redis
+  Worker -->|"Dequeues jobs"| Redis
+  Worker -->|"Claims outbox rows, writes notifications and analytics, SQL"| DB
+  Worker -->|"POST /internal/events, JSON"| Go
+  Go -->|"Writes personalization schema, reads public events and memberships for eligibility, SQL"| DB
+```
+
+Two couplings the picture makes visible. The Go service reads `public` tables directly to decide eligibility (ADR 0005), so a rename in Rails' schema can break it. `GET /recommendations` exists on the Go service, but nothing in the web app or Rails calls it yet.
+
 ## Responsibilities
 
 Rails is the system of record for users, organizations, topics, events, registrations, notifications, and the outbox. Controllers stay thin. `Events::Register` and `Topics::Follow` own multi-step workflows. Models own relationships and validations. PostgreSQL unique indexes and check constraints own the hard invariants, including `reserved_spots <= capacity`.
