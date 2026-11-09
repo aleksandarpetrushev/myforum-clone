@@ -27,6 +27,7 @@ Rails.application.routes.draw do
 
     namespace :me do
       resources :registrations, only: :index
+      resources :recommendations, only: :index
       resources :organizations, only: :index
       resources :notifications, only: :index do
         member do

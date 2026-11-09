@@ -48,6 +48,12 @@ func (s *Server) recommendations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	limit, ok := recommendationLimit(r.URL.Query().Get("limit"))
+	if !ok {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_limit", "limit must be a positive integer")
+		return
+	}
+
 	now := s.now()
 	events, profile, err := s.Store.Candidates(r.Context(), userID, now)
 	if err != nil {
@@ -56,7 +62,7 @@ func (s *Server) recommendations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ranked := ranking.Rank(events, profile, now, 10)
+	ranked := ranking.Rank(events, profile, now, limit)
 	data := make([]map[string]any, 0, len(ranked))
 	for _, item := range ranked {
 		data = append(data, map[string]any{
@@ -68,6 +74,24 @@ func (s *Server) recommendations(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": data})
+}
+
+const (
+	defaultRecommendationLimit = 10
+	maxRecommendationLimit     = 50
+)
+
+// recommendationLimit reads ?limit=. Absent means the default; above the maximum is capped.
+// Rails asks for more than it shows because it drops events the user cannot see or has booked.
+func recommendationLimit(raw string) (int, bool) {
+	if raw == "" {
+		return defaultRecommendationLimit, true
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit < 1 {
+		return 0, false
+	}
+	return min(limit, maxRecommendationLimit), true
 }
 
 func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {

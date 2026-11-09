@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -140,5 +141,67 @@ func TestRestrictedEventIsHiddenUntilMembership(t *testing.T) {
 	}
 	if len(payload.Data) != 1 || payload.Data[0].EventID != 11 {
 		t.Fatalf("member recommendations: %+v", payload.Data)
+	}
+}
+
+func TestRecommendationsLimit(t *testing.T) {
+	memory := store.NewMemory()
+	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+	server := &Server{Store: memory, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	handler := server.Handler()
+
+	for id := 1; id <= 60; id++ {
+		encoded, _ := json.Marshal(map[string]any{
+			"idempotency_key": "evt-" + strconv.Itoa(id),
+			"event_type":      "EventUpdated",
+			"payload": map[string]any{
+				"event": map[string]any{
+					"id":             float64(id),
+					"title":          "Session",
+					"location":       "Geneva",
+					"starts_at":      now.Add(time.Duration(id) * time.Hour).Format(time.RFC3339),
+					"status":         "published",
+					"reserved_spots": float64(0),
+					"capacity":       float64(10),
+					"topic_ids":      []any{},
+				},
+			},
+		})
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/internal/events", bytes.NewReader(encoded)))
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("ingest status %d", response.Code)
+		}
+	}
+
+	cases := []struct {
+		query  string
+		status int
+		count  int
+	}{
+		{"", http.StatusOK, 10},
+		{"&limit=20", http.StatusOK, 20},
+		{"&limit=500", http.StatusOK, 50},
+		{"&limit=0", http.StatusUnprocessableEntity, 0},
+		{"&limit=many", http.StatusUnprocessableEntity, 0},
+	}
+	for _, tc := range cases {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/recommendations?user_id=3"+tc.query, nil))
+		if response.Code != tc.status {
+			t.Fatalf("%q: status %d, want %d", tc.query, response.Code, tc.status)
+		}
+		if tc.status != http.StatusOK {
+			continue
+		}
+		var payload struct {
+			Data []json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if len(payload.Data) != tc.count {
+			t.Fatalf("%q: %d results, want %d", tc.query, len(payload.Data), tc.count)
+		}
 	}
 }

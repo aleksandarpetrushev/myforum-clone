@@ -32,6 +32,10 @@ export class ForumApi {
     return this.http.get<{ data: EventSummary[] }>(`${API_URL}/api/events`, { params });
   }
 
+  recommendations(): Observable<{ data: EventSummary[] }> {
+    return this.http.get<{ data: EventSummary[] }>(`${API_URL}/api/me/recommendations`);
+  }
+
   event(id: number): Observable<EventSummary> {
     return this.http.get<EventSummary>(`${API_URL}/api/events/${id}`);
   }
