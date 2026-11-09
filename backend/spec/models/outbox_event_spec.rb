@@ -2,7 +2,9 @@ require "rails_helper"
 
 RSpec.describe OutboxEvent do
   let(:attrs) do
-    { event_type: "EventUpdated", aggregate_type: "Event", aggregate_id: 1, idempotency_key: "event_updated:1:100", payload: {} }
+    # A payload that matches the contract; these examples are about keys, not about what is sent.
+    { event_type: "TopicUnfollowed", aggregate_type: "TopicFollow", aggregate_id: 1, idempotency_key: "event_updated:1:100",
+      payload: { "user_id" => 1, "topic_id" => 1 } }
   end
 
   it "refuses a repeated key in record! so a second change is never silently dropped" do

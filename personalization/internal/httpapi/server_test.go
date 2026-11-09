@@ -17,7 +17,7 @@ import (
 func TestRecommendationsAndIngest(t *testing.T) {
 	memory := store.NewMemory()
 	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
-	server := &Server{Store: memory, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	server := &Server{Store: memory, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }, Contract: mustValidator(t)}
 	handler := server.Handler()
 
 	body := map[string]any{
@@ -86,7 +86,7 @@ func TestRecommendationsAndIngest(t *testing.T) {
 func TestRestrictedEventIsHiddenUntilMembership(t *testing.T) {
 	memory := store.NewMemory()
 	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
-	server := &Server{Store: memory, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	server := &Server{Store: memory, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }, Contract: mustValidator(t)}
 	handler := server.Handler()
 
 	body, _ := json.Marshal(map[string]any{
@@ -147,7 +147,7 @@ func TestRestrictedEventIsHiddenUntilMembership(t *testing.T) {
 func TestRecommendationsLimit(t *testing.T) {
 	memory := store.NewMemory()
 	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
-	server := &Server{Store: memory, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	server := &Server{Store: memory, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }, Contract: mustValidator(t)}
 	handler := server.Handler()
 
 	for id := 1; id <= 60; id++ {

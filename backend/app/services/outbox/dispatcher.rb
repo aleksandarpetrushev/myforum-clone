@@ -1,5 +1,6 @@
 module Outbox
   class Dispatcher
+    # Returns what the personalization service did with the row: :delivered, :deferred or :skipped.
     def self.call(event)
       case event.event_type
       when "RegistrationCreated", "RegistrationCancelled"

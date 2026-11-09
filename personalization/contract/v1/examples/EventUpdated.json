@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "idempotency_key": "event_updated:42:4",
+  "event_type": "EventUpdated",
+  "payload": {
+    "event": {
+      "id": 42,
+      "title": "Financing the energy transition",
+      "location": "Geneva",
+      "starts_at": "2026-11-23T09:00:00Z",
+      "status": "published",
+      "reserved_spots": 3,
+      "capacity": 80,
+      "topic_ids": [
+        1,
+        6
+      ],
+      "visibility": "organization_restricted",
+      "organization_id": 7,
+      "allowed_organization_ids": [
+        9,
+        12
+      ],
+      "revision": 4
+    }
+  }
+}

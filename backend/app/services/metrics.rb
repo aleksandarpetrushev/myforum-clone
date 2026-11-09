@@ -38,6 +38,12 @@ class Metrics
       (Time.current - oldest).round
     end
 
+    # Above 0 means the personalization service cannot read some rows yet: deploy a version that can, then
+    # run bin/rails outbox:redeliver_deferred (personalization/contract/README.md).
+    def outbox_deferred_count
+      OutboxEvent.deferred.count
+    end
+
     # Above 0 for longer than the job retry window means a cancellation cascade is stuck.
     # Recover with bin/rails events:resume_cancellations.
     def cancelled_events_with_confirmed_registrations

@@ -8,9 +8,12 @@ module Outbox
       OutboxEvent.pending.order(:id).limit(BATCH_SIZE).each do |event|
         event.with_lock do
           if event.status == "pending"
-            Dispatcher.call(event)
-            event.update!(status: "published", published_at: Time.current)
-            published += 1
+            if Dispatcher.call(event) == :deferred
+              event.update!(status: "deferred")
+            else
+              event.update!(status: "published", published_at: Time.current)
+              published += 1
+            end
           end
         end
       end
