@@ -79,6 +79,15 @@ RSpec.describe Recommendations::ForUser do
     expect(recommended).to eq([changed_mind.reload])
   end
 
+  it "leaves out a full event" do
+    full = event("Sold out")
+    full.update!(capacity: 1, reserved_spots: 1)
+    open = event("Open")
+    go_ranks(full, open)
+
+    expect(recommended).to eq([open])
+  end
+
   it "returns at most five" do
     go_ranks(*Array.new(7) { |index| event("Session #{index}") })
 

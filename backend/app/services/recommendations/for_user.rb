@@ -17,6 +17,9 @@ module Recommendations
       events = Pundit.policy_scope!(@user, Event)
         .published
         .upcoming
+        # Until MF-202 adds waitlists a full event is a dead end, and Go's ranking favours full events.
+        # Remove this line when a full event can be joined through its waitlist.
+        .where("events.reserved_spots < events.capacity")
         .where(id: ids - registered)
         .includes(:organization, :topics)
         .index_by(&:id)
