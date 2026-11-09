@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"myforum/personalization/contract"
 	"myforum/personalization/internal/httpapi"
 	"myforum/personalization/internal/store"
 )
@@ -32,7 +33,12 @@ func main() {
 	if addr == "" {
 		addr = "8080"
 	}
-	server := &httpapi.Server{Store: db, Log: log}
+	validator, err := contract.NewValidator()
+	if err != nil {
+		log.Error("contract schema did not compile", "error", err.Error())
+		os.Exit(1)
+	}
+	server := &httpapi.Server{Store: db, Log: log, Contract: validator}
 	log.Info("listening", "addr", addr)
 	if err := httpapi.Serve(ctx, ":"+addr, server.Handler(), log); err != nil {
 		log.Error("server exited", "error", err.Error())

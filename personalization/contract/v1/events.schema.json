@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myforum.example/contract/personalization/v1/events.schema.json",
+  "title": "Rails to personalization events, version 1",
+  "description": "The body of POST /internal/events. Unknown fields are allowed everywhere: adding a field does not change the version (see README.md).",
+  "type": "object",
+  "required": ["schema_version", "idempotency_key", "event_type", "payload"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "event_type": {
+      "enum": [
+        "EventPublished", "EventUpdated", "EventCancelled",
+        "RegistrationCreated", "RegistrationCancelled",
+        "TopicFollowed", "TopicUnfollowed"
+      ]
+    },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "event_type": { "enum": ["EventPublished", "EventUpdated", "EventCancelled"] } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/eventChange" } } }
+    },
+    {
+      "if": { "properties": { "event_type": { "enum": ["RegistrationCreated", "RegistrationCancelled"] } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/registrationChange" } } }
+    },
+    {
+      "if": { "properties": { "event_type": { "const": "TopicFollowed" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/topicFollowed" } } }
+    },
+    {
+      "if": { "properties": { "event_type": { "const": "TopicUnfollowed" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/topicUnfollowed" } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "integer", "minimum": 1 },
+    "ids": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+    "userLocation": { "type": ["string", "null"] },
+    "eventSnapshot": {
+      "description": "Event#snapshot in Rails: the event row as it stood when the outbox row was written.",
+      "type": "object",
+      "required": [
+        "id", "title", "location", "starts_at", "status", "reserved_spots", "capacity",
+        "topic_ids", "visibility", "organization_id", "allowed_organization_ids"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string" },
+        "location": { "type": "string" },
+        "starts_at": { "type": "string", "format": "date-time" },
+        "status": { "enum": ["draft", "published", "cancelled"] },
+        "reserved_spots": { "type": "integer", "minimum": 0 },
+        "capacity": { "type": "integer", "minimum": 1 },
+        "topic_ids": { "$ref": "#/$defs/ids" },
+        "visibility": { "enum": ["public", "organization_restricted"] },
+        "organization_id": { "$ref": "#/$defs/id" },
+        "allowed_organization_ids": { "$ref": "#/$defs/ids" },
+        "revision": {
+          "description": "Optional in version 1: snapshots written before MF-106 have none, and Go applies them as before.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "eventChange": {
+      "type": "object",
+      "required": ["event"],
+      "properties": { "event": { "$ref": "#/$defs/eventSnapshot" } }
+    },
+    "registrationChange": {
+      "type": "object",
+      "required": ["registration_id", "user_id", "event_id", "user_location", "event"],
+      "properties": {
+        "registration_id": { "$ref": "#/$defs/id" },
+        "user_id": { "$ref": "#/$defs/id" },
+        "event_id": { "$ref": "#/$defs/id" },
+        "user_location": { "$ref": "#/$defs/userLocation" },
+        "event": { "$ref": "#/$defs/eventSnapshot" }
+      }
+    },
+    "topicFollowed": {
+      "type": "object",
+      "required": ["user_id", "topic_id", "user_location"],
+      "properties": {
+        "user_id": { "$ref": "#/$defs/id" },
+        "topic_id": { "$ref": "#/$defs/id" },
+        "user_location": { "$ref": "#/$defs/userLocation" }
+      }
+    },
+    "topicUnfollowed": {
+      "type": "object",
+      "required": ["user_id", "topic_id"],
+      "properties": {
+        "user_id": { "$ref": "#/$defs/id" },
+        "topic_id": { "$ref": "#/$defs/id" }
+      }
+    }
+  }
+}

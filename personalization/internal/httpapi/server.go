@@ -4,19 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
 
+	"myforum/personalization/contract"
 	"myforum/personalization/internal/ranking"
 	"myforum/personalization/internal/store"
 )
 
 type Server struct {
-	Store store.Store
-	Log   *slog.Logger
-	Now   func() time.Time
+	Store    store.Store
+	Log      *slog.Logger
+	Now      func() time.Time
+	Contract *contract.Validator
 }
 
 func (s *Server) Handler() http.Handler {
@@ -94,32 +98,85 @@ func recommendationLimit(raw string) (int, bool) {
 	return min(limit, maxRecommendationLimit), true
 }
 
+// maxIngestBody bounds one event. The largest real payload is a few kilobytes; a bigger body gets 413 with
+// a code that says so, rather than being cut off and reported as bad JSON.
+const maxIngestBody = 10 << 20
+
+// ingest answers 204 to every envelope it can apply, valid against the contract or not: a non-2xx stops Rails'
+// outbox poller, and with it notifications and analytics (MF-203). Schema problems are logged instead. A
+// schema_version or event_type this service cannot read gets 422 unsupported_contract, so Rails keeps the row
+// as deferred and sends it again once this service understands it.
 func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		IdempotencyKey string         `json:"idempotency_key"`
-		EventType      string         `json:"event_type"`
-		Payload        map[string]any `json:"payload"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_json", "Request body must be JSON")
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxIngestBody+1))
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_body", "Could not read the request body")
 		return
 	}
-	if body.EventType == "" {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_event", "event_type is required")
+	if len(raw) > maxIngestBody {
+		s.Log.Error("contract.too_large", "bytes_read", len(raw), "limit", maxIngestBody)
+		writeError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "The event body is larger than 10 MiB")
 		return
 	}
 
-	err := s.Store.Apply(r.Context(), store.Incoming{
-		IdempotencyKey: body.IdempotencyKey,
-		EventType:      body.EventType,
-		Payload:        body.Payload,
+	// Decoded once, loosely: a field of the wrong type is a contract problem to log, not a reason to refuse.
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_json", "Request body must be JSON")
+		return
+	}
+	body, ok := decoded.(map[string]any)
+	if !ok {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_json", "Request body must be a JSON object")
+		return
+	}
+	version, versionOK := schemaVersion(body)
+	eventType, _ := body["event_type"].(string)
+	idempotencyKey, _ := body["idempotency_key"].(string)
+	logFields := []any{"event_type", eventType, "schema_version", body["schema_version"], "idempotency_key", idempotencyKey}
+
+	if s.Contract == nil {
+		s.Log.Error("contract.validator_missing", logFields...)
+	} else {
+		if !versionOK || !s.Contract.Supports(version) || !s.Contract.Knows(version, eventType) {
+			s.Log.Error("contract.unsupported", logFields...)
+			writeError(w, http.StatusUnprocessableEntity, "unsupported_contract",
+				"This service cannot read this schema_version or event_type yet")
+			return
+		}
+		if _, present := body["schema_version"]; !present {
+			body["schema_version"] = float64(version)
+		}
+		if err := s.Contract.Validate(version, body); err != nil {
+			s.Log.Warn("contract.invalid", append(logFields, "errors", err.Error())...)
+		}
+	}
+
+	payload, _ := body["payload"].(map[string]any)
+	err = s.Store.Apply(r.Context(), store.Incoming{
+		IdempotencyKey: idempotencyKey,
+		EventType:      eventType,
+		Payload:        payload,
 	})
 	if err != nil {
-		s.Log.Error("ingest failed", "error", err.Error(), "event_type", body.EventType)
+		s.Log.Error("ingest failed", "error", err.Error(), "event_type", eventType)
 		writeError(w, http.StatusInternalServerError, "ingest_failed", "Could not store the event")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// schemaVersion reads schema_version. Rails sent none before MF-203, so a missing one is version 1. A value
+// that is not a whole number cannot name a version.
+func schemaVersion(body map[string]any) (int, bool) {
+	value, present := body["schema_version"]
+	if !present {
+		return 1, true
+	}
+	number, ok := value.(float64)
+	if !ok || number != math.Trunc(number) {
+		return 0, false
+	}
+	return int(number), true
 }
 
 func (s *Server) now() time.Time {

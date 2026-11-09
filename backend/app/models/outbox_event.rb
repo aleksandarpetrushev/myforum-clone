@@ -1,6 +1,10 @@
 class OutboxEvent < ApplicationRecord
-  STATUSES = %w[pending published].freeze
+  # deferred: handled in-process, but the personalization service cannot read it yet (MF-203).
+  STATUSES = %w[pending published deferred].freeze
   NOTIFICATION_OUTCOMES = %w[delivered suppressed].freeze
+
+  # The contract version the payload is written in, fixed when the row is written (MF-203).
+  attribute :schema_version, :integer, default: -> { Personalization::Contract::VERSION }
 
   validates :event_type, :aggregate_type, :aggregate_id, :idempotency_key, presence: true
   validates :status, inclusion: { in: STATUSES }
@@ -8,6 +12,7 @@ class OutboxEvent < ApplicationRecord
   validates :idempotency_key, uniqueness: true
 
   scope :pending, -> { where(status: "pending") }
+  scope :deferred, -> { where(status: "deferred") }
 
   def self.record!(attrs)
     create!(attrs)
