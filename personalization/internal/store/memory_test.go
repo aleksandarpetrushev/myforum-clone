@@ -152,3 +152,86 @@ func TestRegistrationCancelledUpdatesReservedSpots(t *testing.T) {
 		t.Fatalf("expected reserved spots 0, got %+v", events)
 	}
 }
+
+func TestSnapshotRevisions(t *testing.T) {
+	startsAt := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	snapshot := func(title string, spots float64, revision any) map[string]any {
+		event := map[string]any{
+			"id":             float64(9),
+			"title":          title,
+			"location":       "Berlin",
+			"starts_at":      startsAt,
+			"status":         "published",
+			"reserved_spots": spots,
+			"capacity":       float64(10),
+			"visibility":     "public",
+		}
+		if revision != nil {
+			event["revision"] = revision
+		}
+		return map[string]any{"event": event}
+	}
+	apply := func(memory *Memory, key, eventType string, payload map[string]any) {
+		t.Helper()
+		if err := memory.Apply(context.Background(), Incoming{IdempotencyKey: key, EventType: eventType, Payload: payload}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored := func(memory *Memory) Event {
+		t.Helper()
+		events, _, err := memory.Candidates(context.Background(), 1, time.Now())
+		if err != nil || len(events) != 1 {
+			t.Fatalf("candidates: %v %+v", err, events)
+		}
+		return events[0]
+	}
+
+	t.Run("an older revision arriving late is ignored", func(t *testing.T) {
+		memory := NewMemory()
+		apply(memory, "event_updated:9:2", "EventUpdated", snapshot("Second edit", 0, float64(2)))
+		apply(memory, "event_updated:9:1", "EventUpdated", snapshot("First edit", 0, float64(1)))
+
+		if got := stored(memory); got.Title != "Second edit" || got.Revision != 2 {
+			t.Fatalf("stored %q revision %d", got.Title, got.Revision)
+		}
+	})
+
+	t.Run("a late edit does not undo a cancellation", func(t *testing.T) {
+		memory := NewMemory()
+		cancelled := snapshot("Edit", 0, float64(3))
+		cancelled["event"].(map[string]any)["status"] = "cancelled"
+		apply(memory, "event_cancelled:9", "EventCancelled", cancelled)
+		apply(memory, "event_updated:9:2", "EventUpdated", snapshot("Edit", 0, float64(2)))
+
+		if got := memory.events[9]; got.Status != "cancelled" || got.Revision != 3 {
+			t.Fatalf("status %q revision %d, want cancelled at 3", got.Status, got.Revision)
+		}
+		if events, _, _ := memory.Candidates(context.Background(), 1, time.Now()); len(events) != 0 {
+			t.Fatalf("cancelled event is still a candidate: %+v", events)
+		}
+	})
+
+	t.Run("seat counts arriving out of order keep the newest", func(t *testing.T) {
+		memory := NewMemory()
+		apply(memory, "registration_created:2:1", "RegistrationCreated", snapshot("Edit", 6, float64(5)))
+		apply(memory, "registration_created:1:1", "RegistrationCreated", snapshot("Edit", 5, float64(4)))
+
+		if got := stored(memory); got.ReservedSpots != 6 {
+			t.Fatalf("reserved spots %d, want 6", got.ReservedSpots)
+		}
+	})
+
+	t.Run("a snapshot without a revision applies and keeps the stored revision", func(t *testing.T) {
+		memory := NewMemory()
+		apply(memory, "event_updated:9:1", "EventUpdated", snapshot("Edited", 5, float64(1)))
+		apply(memory, "registration_created:7:1", "RegistrationCreated", snapshot("Edited", 6, nil))
+
+		if got := stored(memory); got.ReservedSpots != 6 || got.Revision != 1 {
+			t.Fatalf("reserved spots %d revision %d, want 6 at revision 1", got.ReservedSpots, got.Revision)
+		}
+		apply(memory, "event_updated:9:0", "EventUpdated", snapshot("Older edit", 6, float64(0)))
+		if got := stored(memory); got.Title != "Edited" {
+			t.Fatalf("an older revision was applied after a legacy snapshot: %q", got.Title)
+		}
+	})
+}

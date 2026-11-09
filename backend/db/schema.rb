@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_10_28_100200) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_09_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_trgm"
   enable_extension "plpgsql"
@@ -70,6 +70,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_10_28_100200) do
     t.datetime "updated_at", null: false
     t.string "visibility", default: "public", null: false
     t.datetime "cancelled_at"
+    t.integer "revision", default: 0, null: false
     t.index ["description"], name: "index_events_on_description_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["location"], name: "index_events_on_location"
     t.index ["organization_id"], name: "index_events_on_organization_id"

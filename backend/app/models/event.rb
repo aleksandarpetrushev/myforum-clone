@@ -75,7 +75,8 @@ class Event < ApplicationRecord
       "topic_ids" => topic_ids,
       "visibility" => visibility,
       "organization_id" => organization_id,
-      "allowed_organization_ids" => allowed_organization_ids
+      "allowed_organization_ids" => allowed_organization_ids,
+      "revision" => revision
     }
   end
 

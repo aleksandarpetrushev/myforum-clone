@@ -234,4 +234,14 @@ RSpec.describe "Event creation", type: :request do
     expect(json_body.dig("error", "details")).to have_key("status")
     expect(Event.find(event_id).status).to eq("published")
   end
+  it "accepts the same PATCH twice in a row (MF-106)" do
+    create_event(admin)
+    event_id = JSON.parse(response.body)["id"]
+    2.times do
+      patch "/api/events/#{event_id}", params: { event: { title: "Renamed session" } }, headers: auth_headers(admin)
+      expect(response).to have_http_status(:ok)
+    end
+
+    expect(Event.find(event_id)).to have_attributes(title: "Renamed session", revision: 1)
+  end
 end

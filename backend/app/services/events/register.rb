@@ -34,7 +34,7 @@ module Events
           raise AlreadyRegistered
         end
 
-        event.update!(reserved_spots: event.reserved_spots + 1)
+        event.update!(reserved_spots: event.reserved_spots + 1, revision: event.revision + 1)
         record_created(event, registration)
       end
 
