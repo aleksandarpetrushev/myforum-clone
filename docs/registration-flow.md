@@ -4,27 +4,53 @@ Registering commits the business change and the outbox row together. Side effect
 
 ```mermaid
 sequenceDiagram
-  participant Client
-  participant Rails
-  participant Service as EventsRegister
+  autonumber
+  participant Client as Angular
+  participant API as RegistrationsController
+  participant Reg as Events::Register
   participant DB as PostgreSQL
-  participant Job as ProcessOutboxJob
+  participant Redis
+  participant Poll as ProcessOutboxJob
   participant Notify as SendNotificationJob
+  participant Stats as RecordAnalyticsJob
   participant Go as Personalization
 
-  Client->>Rails: POST /api/registrations
-  Rails->>Service: call
-  Service->>DB: SELECT event FOR UPDATE
-  Service->>DB: insert registration
-  Service->>DB: increment reserved_spots
-  Service->>DB: insert RegistrationCreated
-  Service-->>Rails: registration
-  Rails-->>Client: 201
-  Job->>DB: claim pending outbox row
-  Job->>Notify: enqueue notification
-  Job->>Go: POST /internal/events
-  Notify->>DB: insert notification
+  Client->>API: POST /api/registrations {event_id}
+  API->>DB: policy_scope(Event).find + authorize show?
+  Note over API,DB: not visible → 404
+  API->>Reg: call
+  rect rgb(235, 242, 255)
+    Note over Reg,DB: one transaction
+    Reg->>DB: SELECT event FOR UPDATE (must be published)
+    Reg->>DB: SELECT registration FOR UPDATE
+    Note over Reg,DB: confirmed → 409 duplicate · full → 409 event_full
+    Reg->>DB: INSERT registration, or reconfirm a cancelled one
+    Reg->>DB: UPDATE events SET reserved_spots + 1
+    Reg->>DB: INSERT outbox_events RegistrationCreated
+  end
+  Reg->>Redis: after commit: delete event detail, bump list epoch
+  API-->>Client: 201 registration
+
+  loop every 1–5 s
+    Poll->>DB: pending rows, oldest first, lock each row
+    Poll->>Redis: enqueue SendNotificationJob, RecordAnalyticsJob
+    Poll->>Go: POST /internal/events
+    Go->>DB: skip if key processed, else update personalization schema
+    Poll->>DB: mark row published
+  end
+
+  Notify->>DB: lock user, lock outbox row
+  alt notification_outcome already set
+    Notify-->>Notify: do nothing
+  else allowed by preferences
+    Notify->>DB: INSERT notification, outcome = delivered
+  else muted
+    Notify->>DB: outcome = suppressed
+  end
+  Stats->>DB: INSERT analytics_events (unique key)
 ```
+
+Steps 1–10 happen before the response; everything after is asynchronous. If the POST to the Go service raises, the row stays pending, but the exception also fails `ProcessOutboxJob`, which reschedules itself only after a pass completes, so polling stops until the job is started again. That is a known open issue. The notification branch is ADR 0007; the cache step is ADR 0005.
 
 `Events::Register` locks the event row, rejects a registration that is already confirmed, and rejects the call when `reserved_spots` is already at `capacity`. A cancelled registration for the same user and event is confirmed again and reserves another spot. The unique index on `(user_id, event_id)` is the backstop for a duplicate insert. The check constraint `reserved_spots <= capacity` is the backstop for an oversell. A failed outbox insert rolls the registration back.
 
