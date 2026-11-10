@@ -44,6 +44,11 @@ class Metrics
       OutboxEvent.deferred.count
     end
 
+    # Above 0 means an offer's expiry job was lost: run bin/rails waitlist:expire_overdue.
+    def overdue_waitlist_offers
+      Waitlist::ExpireOverdue.scope.count
+    end
+
     # Above 0 for longer than the job retry window means a cancellation cascade is stuck.
     # Recover with bin/rails events:resume_cancellations.
     def cancelled_events_with_confirmed_registrations

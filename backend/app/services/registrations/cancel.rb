@@ -37,6 +37,7 @@ module Registrations
         end
       end
 
+      Waitlist::ScheduleExpiry.call(offers)
       registration
     end
 

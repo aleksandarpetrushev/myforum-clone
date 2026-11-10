@@ -45,6 +45,7 @@ module Events
       end
       return @event unless changed
 
+      Waitlist::ScheduleExpiry.call(offers)
       Events::Cache.invalidate(@event.id)
       RebuildEventCacheJob.perform_later(@event.id)
       @event
