@@ -61,7 +61,25 @@ class Registration < ApplicationRecord
                 .count + 1
   end
 
-  def as_json_api(event_visible: true)
+  # Positions for many waitlisted registrations in one query, keyed by id: one row per registration asked
+  # about, each counting the earlier joiners of its own line through the waitlist index.
+  def self.waitlist_positions(registrations)
+    ids = registrations.select(&:waitlisted?).map(&:id)
+    return {} if ids.empty?
+
+    sql = sanitize_sql_array([<<~SQL.squish, ids])
+      SELECT r.id,
+             (SELECT COUNT(*) FROM registrations o
+               WHERE o.event_id = r.event_id AND o.status = 'waitlisted'
+                 AND (o.waitlisted_at, o.id) < (r.waitlisted_at, r.id)) + 1
+        FROM registrations r
+       WHERE r.id IN (?)
+    SQL
+    connection.select_rows(sql).to_h { |id, position| [id.to_i, position.to_i] }
+  end
+
+  # waitlist_position is passed in rather than computed here, so a list never runs one query per row.
+  def as_json_api(event_visible: true, waitlist_position: nil)
     payload = {
       "id" => id,
       "status" => status,
@@ -70,7 +88,7 @@ class Registration < ApplicationRecord
       "user_id" => user_id,
       "created_at" => created_at
     }
-    payload["waitlist_position"] = waitlist_position if waitlisted?
+    payload["waitlist_position"] = waitlist_position if waitlisted? && waitlist_position
     payload["offer_expires_at"] = offer_expires_at if offered?
     payload["event"] = event_summary if event_visible && event
     payload

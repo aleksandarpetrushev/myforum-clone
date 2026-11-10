@@ -110,7 +110,7 @@ RSpec.describe Registrations::Cancel do
 
   it "rolls back the cancellation when the outbox write fails" do
     registration = Events::Register.new(user: user, event: event).call
-    allow(OutboxEvent).to receive(:record!).and_raise(RuntimeError, "outbox down")
+    allow(OutboxEvent).to receive(:create!).and_raise(RuntimeError, "outbox down")
 
     expect {
       described_class.new(user: user, event: event).call

@@ -21,25 +21,8 @@ module Waitlist
       end
       # One seat count and one revision for the whole batch.
       event.update!(reserved_spots: event.reserved_spots + offered.size, revision: event.revision + 1)
-      offered.each { |registration| record_offer(event, registration) }
+      offered.each { |registration| Registrations::ChangeEvent.record!("WaitlistOffered", event, registration) }
       offered
     end
-
-    def self.record_offer(event, registration)
-      OutboxEvent.create!(
-        event_type: "WaitlistOffered",
-        aggregate_type: "Registration",
-        aggregate_id: registration.id,
-        idempotency_key: "waitlist_offered:#{registration.id}:#{registration.lifecycle_version}",
-        payload: {
-          "registration_id" => registration.id,
-          "user_id" => registration.user_id,
-          "event_id" => event.id,
-          "user_location" => registration.user.location,
-          "event" => event.snapshot
-        }
-      )
-    end
-    private_class_method :record_offer
   end
 end

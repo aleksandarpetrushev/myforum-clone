@@ -35,8 +35,11 @@ module Waitlist
 
       result
     rescue ActiveRecord::RecordNotUnique
-      # Two joins raced to create the row; the other one won, so this one is a repeat.
-      Result.new(registration: @event.registrations.find_by!(user_id: @user.id), created: false)
+      # Another request created this user's row first: a second join, or a registration. Answer for what it is.
+      existing = @event.registrations.find_by!(user_id: @user.id)
+      raise AlreadyRegistered unless existing.waitlisted? || existing.offered?
+
+      Result.new(registration: existing, created: false)
     end
 
     private

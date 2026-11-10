@@ -21,6 +21,8 @@ class SendNotificationJob < ApplicationJob
 
     kind, title, body = COPY[outbox_event.event_type]
     return unless title
+    # The person declined a waitlist offer themselves; there is nothing to tell them (MF-202).
+    return if outbox_event.payload["declined_offer"]
 
     payload = outbox_event.payload
     user_id = payload.fetch("user_id")

@@ -45,9 +45,14 @@ RSpec.describe "freeing seats for the waitlist" do
     expect(OutboxEvent.where(event_type: "RegistrationCancelled").count).to eq(1)
   end
 
-  it "passes a declined offer to the next in line without telling the decliner" do
+  it "passes a declined offer to the next in line, and records the decline without telling the decliner" do
     cancel(ana).call
-    expect { cancel(first_in_line.user).call }.not_to change { OutboxEvent.where(event_type: "RegistrationCancelled").count }
+    cancel(first_in_line.user).call
+
+    declined = OutboxEvent.find_by!(event_type: "RegistrationCancelled", aggregate_id: first_in_line.id)
+    expect(declined.payload).to include("declined_offer" => true)
+    perform_enqueued_jobs { SendNotificationJob.perform_now(declined.id) }
+    expect(Notification.where(user: first_in_line.user)).to be_empty
 
     expect(first_in_line.reload).to have_attributes(status: "cancelled", cancelled_by: "participant")
     expect(second_in_line.reload.status).to eq("offered")

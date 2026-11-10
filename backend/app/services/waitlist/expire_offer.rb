@@ -14,6 +14,9 @@ module Waitlist
         event = Event.lock.find(registration.event_id)
         registration.lock!
         next unless registration.offered? && registration.lifecycle_version == lifecycle_version
+        # A cancelled event's offers are ended by the cancellation cascade, which tells people the event was
+        # cancelled; expiring them here would tell them the seat went to someone else.
+        next unless event.status == "published"
 
         if registration.offer_expires_at > now
           reschedule_at = registration.offer_expires_at
@@ -22,7 +25,7 @@ module Waitlist
 
         Registrations::Cancellation.apply!(registration, by: "offer_expired")
         event.update!(reserved_spots: event.reserved_spots - 1, revision: event.revision + 1)
-        record_expired(event, registration)
+        Registrations::ChangeEvent.record!("WaitlistOfferExpired", event, registration)
         offers = OfferFreedSeats.call(event, now: now)
       end
 
@@ -31,22 +34,5 @@ module Waitlist
       end
       ScheduleExpiry.call(offers)
     end
-
-    def self.record_expired(event, registration)
-      OutboxEvent.create!(
-        event_type: "WaitlistOfferExpired",
-        aggregate_type: "Registration",
-        aggregate_id: registration.id,
-        idempotency_key: "waitlist_offer_expired:#{registration.id}:#{registration.lifecycle_version}",
-        payload: {
-          "registration_id" => registration.id,
-          "user_id" => registration.user_id,
-          "event_id" => event.id,
-          "user_location" => registration.user.location,
-          "event" => event.snapshot
-        }
-      )
-    end
-    private_class_method :record_expired
   end
 end

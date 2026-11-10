@@ -36,9 +36,11 @@ module Api
           .load
 
         visible_event_ids = visible_event_ids_for(upcoming + past)
+        # Only Upcoming shows a place in line; a line in Past closed when its event started.
+        positions = Registration.waitlist_positions(upcoming)
         render json: {
-          "upcoming" => upcoming.map { |registration| json_for(registration, visible_event_ids) },
-          "past" => past.map { |registration| json_for(registration, visible_event_ids) }
+          "upcoming" => upcoming.map { |registration| json_for(registration, visible_event_ids, positions) },
+          "past" => past.map { |registration| json_for(registration, visible_event_ids, {}) }
         }
       end
 
@@ -51,8 +53,9 @@ module Api
         policy_scope(Event).where(id: event_ids).ids.to_set
       end
 
-      def json_for(registration, visible_event_ids)
-        registration.as_json_api(event_visible: visible_event_ids.include?(registration.event_id))
+      def json_for(registration, visible_event_ids, positions)
+        registration.as_json_api(event_visible: visible_event_ids.include?(registration.event_id),
+                                 waitlist_position: positions[registration.id])
       end
     end
   end

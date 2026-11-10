@@ -25,12 +25,13 @@ module Registrations
           raise EventStarted if event.starts_at <= Time.current
           ensure_reserved_spot!(event, registration)
 
-          # Declining an offer frees its held seat without a notification: the person chose it, and the next
-          # WaitlistOffered row carries the new seat count to the personalization service.
+          # A declined offer is recorded like any cancellation, so the personalization service sees the seat count
+          # even when nobody else is in line; declined_offer tells the notification job not to tell the decliner.
           declined_offer = registration.offered?
           Registrations::Cancellation.apply!(registration, by: "participant")
           event.update!(reserved_spots: event.reserved_spots - 1, revision: event.revision + 1)
-          record_cancelled(event, registration) unless declined_offer
+          Registrations::ChangeEvent.record!("RegistrationCancelled", event, registration,
+                                             declined_offer ? { "declined_offer" => true } : {})
           @offers = Waitlist::OfferFreedSeats.call(event)
         elsif !registration.cancelled?
           raise InvalidState
@@ -47,22 +48,6 @@ module Registrations
     end
 
     private
-
-    def record_cancelled(event, registration)
-      OutboxEvent.record!(
-        event_type: "RegistrationCancelled",
-        aggregate_type: "Registration",
-        aggregate_id: registration.id,
-        idempotency_key: "registration_cancelled:#{registration.id}:#{registration.lifecycle_version}",
-        payload: {
-          "registration_id" => registration.id,
-          "user_id" => @user.id,
-          "event_id" => event.id,
-          "user_location" => @user.location,
-          "event" => event.snapshot
-        }
-      )
-    end
 
     def ensure_reserved_spot!(event, registration)
       return if event.reserved_spots >= 1

@@ -50,7 +50,9 @@ module Api
       event = policy_scope(Event).find(params[:event_id])
       authorize event, :show?
       result = Waitlist::Join.new(user: current_user, event: event).call
-      render json: result.registration.as_json_api, status: result.created ? :created : :ok
+      registration = result.registration
+      render json: registration.as_json_api(waitlist_position: registration.waitlist_position),
+             status: result.created ? :created : :ok
     rescue Waitlist::Join::AlreadyRegistered
       render_error(code: "duplicate_registration", message: "You are already registered for this event.", status: :conflict)
     rescue Waitlist::Join::SeatsAvailable

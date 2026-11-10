@@ -29,6 +29,7 @@ module Events
         @event.save!
         # Read now: the reload below for the snapshot forgets what this save changed.
         raised_capacity = capacity_raised?
+        moved_start = @event.saved_change_to_starts_at?
         Events::AllowedOrganizations.replace(@event, allowed_ids) if organizations_changed
         # create!, not record!: with the lock and the revision a repeated key cannot happen, so if one does it must
         # fail loudly rather than return the earlier row and drop this change.
@@ -40,12 +41,15 @@ module Events
           payload: { "event" => @event.reload.snapshot }
         )
         Events::Publication.record!(@event) if !was_published && @event.status == "published"
-        # More seats: offer them to the line in the same transaction, before a direct registration can take them.
-        @offers = Waitlist::OfferFreedSeats.call(@event) if raised_capacity
+        # More seats, or a start moved out of the closed last hour: offer free seats to the line in the same
+        # transaction, before a direct registration can take them. A moved start also shortens open offers that
+        # would now end after it.
+        @shortened = moved_start ? Waitlist::FitOffersToStart.call(@event) : []
+        @offers = Waitlist::OfferFreedSeats.call(@event) if raised_capacity || moved_start
       end
       return @event unless changed
 
-      Waitlist::ScheduleExpiry.call(offers)
+      Waitlist::ScheduleExpiry.call(offers + (@shortened || []))
       Events::Cache.invalidate(@event.id)
       RebuildEventCacheJob.perform_later(@event.id)
       @event

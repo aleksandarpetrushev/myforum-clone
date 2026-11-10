@@ -48,7 +48,7 @@ module Api
     def viewer_details(event)
       registration = current_user.registrations.find_by(event_id: event.id)
       details = {
-        "my_registration" => registration&.as_json_api(event_visible: false)
+        "my_registration" => registration&.as_json_api(event_visible: false, waitlist_position: registration.waitlist_position)
           &.slice("id", "status", "cancelled_by", "waitlist_position", "offer_expires_at")
       }
       details["waitlist_count"] = event.registrations.where(status: "waitlisted").count if EventPolicy.new(current_user, event).update?

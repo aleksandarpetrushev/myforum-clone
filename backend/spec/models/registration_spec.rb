@@ -78,10 +78,31 @@ RSpec.describe Registration do
       expect([first.waitlist_position, second.waitlist_position]).to eq([1, 2])
     end
 
-    it "is only in the API for a waitlisted registration" do
+    it "is only in the API for a waitlisted registration, when the caller passes it in" do
       registration = waitlist("ana", at: 1.minute.ago)
-      expect(registration.as_json_api(event_visible: false)).to include("waitlist_position" => 1)
+      expect(registration.as_json_api(event_visible: false, waitlist_position: 1)).to include("waitlist_position" => 1)
+      expect(registration.as_json_api(event_visible: false)).not_to have_key("waitlist_position")
       expect(registration.as_json_api(event_visible: false)).not_to have_key("offer_expires_at")
+    end
+
+    it "computes many positions in one query" do
+      other_event = Event.create!(
+        organization: organization, title: "Other", description: "Talk", starts_at: 4.days.from_now,
+        ends_at: 4.days.from_now + 1.hour, location: "Geneva", kind: "in_person", capacity: 1, status: "published"
+      )
+      first = waitlist("ana", at: 3.minutes.ago)
+      second = waitlist("ben", at: 2.minutes.ago)
+      elsewhere = described_class.create!(user: user("cyd"), event: other_event, status: "waitlisted",
+                                          waitlisted_at: 1.minute.ago, lifecycle_version: 1)
+
+      queries = 0
+      counter = ->(*) { queries += 1 }
+      positions = ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+        described_class.waitlist_positions([first, second, elsewhere])
+      end
+
+      expect(positions).to eq(first.id => 1, second.id => 2, elsewhere.id => 1)
+      expect(queries).to eq(1)
     end
   end
 end
