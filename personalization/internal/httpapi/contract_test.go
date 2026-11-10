@@ -159,6 +159,18 @@ func TestEveryExampleIsValidAndUnderstood(t *testing.T) {
 			t.Fatalf("cancelled registration not read: %+v", events)
 		}
 	})
+	t.Run("WaitlistOffered and WaitlistOfferExpired", func(t *testing.T) {
+		c := newContractServer(t)
+		c.ingest(t, example(t, "RegistrationCreated"))
+		c.ingest(t, example(t, "WaitlistOffered"))
+		if events, _ := c.candidates(t, 99); len(events) != 1 || events[0].ReservedSpots != 5 || events[0].Revision != 7 {
+			t.Fatalf("offer did not update the seat count: %+v", events)
+		}
+		c.ingest(t, example(t, "WaitlistOfferExpired"))
+		if events, _ := c.candidates(t, 99); len(events) != 1 || events[0].ReservedSpots != 4 {
+			t.Fatalf("expired offer did not release the seat: %+v", events)
+		}
+	})
 	t.Run("TopicFollowed and TopicUnfollowed", func(t *testing.T) {
 		c := newContractServer(t)
 		c.ingest(t, example(t, "TopicFollowed"))

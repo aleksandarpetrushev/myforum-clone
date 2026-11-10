@@ -12,6 +12,7 @@
       "enum": [
         "EventPublished", "EventUpdated", "EventCancelled",
         "RegistrationCreated", "RegistrationCancelled",
+        "WaitlistOffered", "WaitlistOfferExpired",
         "TopicFollowed", "TopicUnfollowed"
       ]
     },
@@ -23,7 +24,7 @@
       "then": { "properties": { "payload": { "$ref": "#/$defs/eventChange" } } }
     },
     {
-      "if": { "properties": { "event_type": { "enum": ["RegistrationCreated", "RegistrationCancelled"] } } },
+      "if": { "properties": { "event_type": { "enum": ["RegistrationCreated", "RegistrationCancelled", "WaitlistOffered", "WaitlistOfferExpired"] } } },
       "then": { "properties": { "payload": { "$ref": "#/$defs/registrationChange" } } }
     },
     {

@@ -17,6 +17,8 @@ Rails' specs check every outbox row they write against the schema (`backend/spec
 
 **No new version** for adding a field. Unknown fields are allowed everywhere and ignored by Go. If Go starts to depend on a new field, the field stays optional in the schema and in Go until no row without it remains (as `revision` in version 1).
 
+**No new version either** for adding an event type: it is added to the `event_type` enum with an example. But this service must be deployed before Rails writes the new type. Until then it answers `unsupported_contract`, Rails keeps those rows `deferred`, and `bin/rails outbox:redeliver_deferred` sends them once this service knows the type (as for `WaitlistOffered` and `WaitlistOfferExpired` in MF-202).
+
 **A new version** for removing or renaming a field, changing a field's type or meaning, or making an optional field required.
 
 ## How Go treats a payload
