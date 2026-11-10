@@ -92,4 +92,55 @@ describe('EventDetailComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('2026');
     expect(button('Register')).toBeUndefined();
   });
+  describe('waitlist (MF-202)', () => {
+    const full = { ...published, capacity: 10, reserved_spots: 10, my_registration: null };
+
+    it('offers Join waitlist instead of Register when the event is full, then shows the place in line', () => {
+      render(full, []);
+      expect(button('Register')).toBeUndefined();
+
+      button('Join waitlist')!.click();
+      const join = http.expectOne(`${api}/api/registrations/waitlist`);
+      expect(join.request.body).toEqual({ event_id: 5 });
+      join.flush({ id: 40, status: 'waitlisted', event_id: 5, waitlist_position: 3 });
+      http.expectOne(`${api}/api/events/5`).flush({ ...full, my_registration: { id: 40, status: 'waitlisted', waitlist_position: 3 } });
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('You are #3 in line.');
+      expect(button('Join waitlist')).toBeUndefined();
+      expect(button('Leave waitlist')).toBeDefined();
+    });
+
+    it('shows an offered seat with its deadline, and confirms it', () => {
+      render({ ...full, my_registration: { id: 40, status: 'offered', offer_expires_at: '2026-11-12T18:00:00Z' } }, []);
+      expect(fixture.nativeElement.textContent).toContain('A seat is held for you until');
+      expect(button('Decline')).toBeDefined();
+
+      button('Confirm seat')!.click();
+      http.expectOne(`${api}/api/registrations/accept_offer`).flush({ id: 40, status: 'confirmed', event_id: 5 });
+      http.expectOne(`${api}/api/events/5`).flush({ ...full, my_registration: { id: 40, status: 'confirmed' } });
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('You are registered.');
+      expect(button('Confirm seat')).toBeUndefined();
+    });
+
+    it('declines an offered seat through the registration cancel', () => {
+      render({ ...full, my_registration: { id: 40, status: 'offered', offer_expires_at: '2026-11-12T18:00:00Z' } }, []);
+
+      button('Decline')!.click();
+      http.expectOne(`${api}/api/registrations/cancel`).flush({ id: 40, status: 'cancelled', event_id: 5 });
+      http.expectOne(`${api}/api/events/5`).flush({ ...full, my_registration: { id: 40, status: 'cancelled' } });
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('You declined the seat.');
+      expect(button('Join waitlist')).toBeDefined();
+    });
+
+    it("shows the organizer's admins the waitlist count", () => {
+      render({ ...full, waitlist_count: 7 }, [{ id: 1, name: 'Atlas' }]);
+
+      expect(fixture.nativeElement.textContent).toContain('7 on the waitlist');
+    });
+  });
 });

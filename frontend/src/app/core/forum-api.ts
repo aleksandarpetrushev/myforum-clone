@@ -60,6 +60,14 @@ export class ForumApi {
     return this.http.post<Registration>(`${API_URL}/api/registrations`, { event_id: eventId });
   }
 
+  joinWaitlist(eventId: number): Observable<Registration> {
+    return this.http.post<Registration>(`${API_URL}/api/registrations/waitlist`, { event_id: eventId });
+  }
+
+  acceptOffer(eventId: number): Observable<Registration> {
+    return this.http.post<Registration>(`${API_URL}/api/registrations/accept_offer`, { event_id: eventId });
+  }
+
   cancelRegistration(eventId: number): Observable<Registration> {
     return this.http.post<Registration>(`${API_URL}/api/registrations/cancel`, { event_id: eventId });
   }

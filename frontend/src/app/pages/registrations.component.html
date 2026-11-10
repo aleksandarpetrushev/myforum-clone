@@ -40,6 +40,12 @@
       @if (upcoming && happeningNow(registration)) {
         <strong>Happening now</strong> ·
       }
+      @if (upcoming && registration.status === 'waitlisted') {
+        <strong>Waitlist #{{ registration.waitlist_position }}</strong> ·
+      }
+      @if (upcoming && registration.status === 'offered') {
+        <strong>Seat offered: confirm by {{ registration.offer_expires_at | date: 'medium' }}</strong> ·
+      }
       @if (registration.event) {
         {{ registration.event.starts_at }} · {{ registration.event.location }}
       }
@@ -49,15 +55,15 @@
       @if (cancellingId() === registration.id) {
         <p>Cancelling…</p>
       } @else if (confirmingId() === registration.id) {
-        @if (registration.event) {
-          <p>Cancel your registration for {{ registration.event.title }}?</p>
-        } @else {
-          <p>Cancel this registration?</p>
-        }
+        <p>{{ cancelQuestion(registration) }}</p>
         <button type="button" (click)="confirmCancel(registration)" [disabled]="cancellingId() !== null">Confirm cancel</button>
         <button type="button" class="secondary" (click)="dismissConfirm()" [disabled]="cancellingId() !== null">Keep registration</button>
       } @else {
-        <button type="button" (click)="askCancel(registration)" [disabled]="cancellingId() !== null">Cancel registration</button>
+        @if (registration.status === 'offered') {
+          <button type="button" (click)="acceptOffer(registration)" [disabled]="acceptingId() !== null">Confirm seat</button>
+        }
+        <button type="button" [class.secondary]="registration.status === 'offered'" (click)="askCancel(registration)"
+                [disabled]="cancellingId() !== null">{{ cancelLabel(registration) }}</button>
       }
     }
   </article>
