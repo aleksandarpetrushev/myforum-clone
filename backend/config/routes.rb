@@ -15,6 +15,8 @@ Rails.application.routes.draw do
     resources :registrations, only: :create do
       collection do
         post :cancel
+        post :waitlist
+        post :accept_offer
       end
     end
 
