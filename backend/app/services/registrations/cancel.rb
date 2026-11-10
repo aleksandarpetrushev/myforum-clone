@@ -18,7 +18,7 @@ module Registrations
         registration = event.registrations.lock.find_by(user_id: @user.id)
         raise UserNotRegistered unless registration
 
-        if registration.can_cancel?
+        if registration.confirmed?
           raise EventStarted if event.starts_at <= Time.current
           ensure_reserved_spot!(event, registration)
 

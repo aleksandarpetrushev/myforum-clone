@@ -10,7 +10,8 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_09_140000) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_10_100000) do
+
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_trgm"
   enable_extension "plpgsql"
@@ -156,11 +157,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_09_140000) do
     t.datetime "updated_at", null: false
     t.integer "lifecycle_version", default: 1, null: false
     t.string "cancelled_by"
+    t.datetime "waitlisted_at"
+    t.datetime "offered_at"
+    t.datetime "offer_expires_at"
+    t.index ["event_id", "status", "waitlisted_at", "id"], name: "index_registrations_on_waitlist_order"
     t.index ["event_id"], name: "index_registrations_on_event_id"
     t.index ["user_id", "event_id"], name: "index_registrations_on_user_id_and_event_id", unique: true
     t.index ["user_id"], name: "index_registrations_on_user_id"
-    t.check_constraint "cancelled_by IS NULL OR (cancelled_by::text = ANY (ARRAY['participant'::character varying, 'organizer'::character varying]::text[]))", name: "registrations_cancelled_by_valid"
-    t.check_constraint "status::text = ANY (ARRAY['confirmed'::character varying, 'cancelled'::character varying, 'failed'::character varying]::text[])", name: "registrations_status_valid"
+    t.check_constraint "cancelled_by IS NULL OR (cancelled_by::text = ANY (ARRAY['participant'::character varying, 'organizer'::character varying, 'offer_expired'::character varying]::text[]))", name: "registrations_cancelled_by_valid"
+    t.check_constraint "status::text <> 'offered'::text OR offered_at IS NOT NULL AND offer_expires_at IS NOT NULL", name: "registrations_offered_has_deadline"
+    t.check_constraint "status::text <> 'waitlisted'::text OR waitlisted_at IS NOT NULL", name: "registrations_waitlisted_has_join_time"
+    t.check_constraint "status::text = ANY (ARRAY['confirmed'::character varying, 'cancelled'::character varying, 'failed'::character varying, 'waitlisted'::character varying, 'offered'::character varying]::text[])", name: "registrations_status_valid"
   end
 
   create_table "speakers", force: :cascade do |t|
