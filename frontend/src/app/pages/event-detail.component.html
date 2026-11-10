@@ -28,7 +28,13 @@
           <p>You are registered.</p>
         }
         @case ('waitlisted') {
-          <p>You are <strong>#{{ registration.waitlist_position }}</strong> in line.</p>
+          @if (full()) {
+            <p>You are <strong>#{{ registration.waitlist_position }}</strong> in line.</p>
+          } @else {
+            <!-- Only in the last hour: the line is closed and a free seat goes to whoever registers first. -->
+            <p>A seat is free. Register now to take it.</p>
+            <button type="button" (click)="register()" [disabled]="busy()">Register</button>
+          }
           <button type="button" class="secondary" (click)="leave('You left the waitlist.')" [disabled]="busy()">Leave waitlist</button>
         }
         @case ('offered') {
@@ -37,6 +43,8 @@
           <button type="button" class="secondary" (click)="leave('You declined the seat.')" [disabled]="busy()">Decline</button>
         }
       }
+    } @else if (full() && lineClosed()) {
+      <p class="muted">This event is full, and its waitlist closed an hour before the start.</p>
     } @else if (full()) {
       <button type="button" (click)="joinWaitlist()" [disabled]="busy()">Join waitlist</button>
     } @else {

@@ -24,7 +24,8 @@ export class RegistrationsComponent {
   }
 
   askCancel(registration: Registration): void {
-    if (this.cancellingId() !== null) return;
+    // Not while a seat is being confirmed: accepting and declining the same offer must not race.
+    if (this.cancellingId() !== null || this.acceptingId() !== null) return;
     this.notice.set(null);
     this.error.set(null);
     this.confirmingId.set(registration.id);

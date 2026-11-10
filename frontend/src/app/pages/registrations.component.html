@@ -60,10 +60,11 @@
         <button type="button" class="secondary" (click)="dismissConfirm()" [disabled]="cancellingId() !== null">Keep registration</button>
       } @else {
         @if (registration.status === 'offered') {
-          <button type="button" (click)="acceptOffer(registration)" [disabled]="acceptingId() !== null">Confirm seat</button>
+          <button type="button" (click)="acceptOffer(registration)"
+                  [disabled]="acceptingId() !== null || cancellingId() !== null">Confirm seat</button>
         }
         <button type="button" [class.secondary]="registration.status === 'offered'" (click)="askCancel(registration)"
-                [disabled]="cancellingId() !== null">{{ cancelLabel(registration) }}</button>
+                [disabled]="cancellingId() !== null || acceptingId() !== null">{{ cancelLabel(registration) }}</button>
       }
     }
   </article>

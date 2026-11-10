@@ -192,6 +192,20 @@ describe('RegistrationsComponent', () => {
       expect(text()).toContain('Your seat is confirmed.');
     });
 
+    it('blocks Decline while a seat is being confirmed', () => {
+      respond({ upcoming: [offered], past: [] });
+
+      buttonNamed('Confirm seat')!.click();
+      fixture.detectChanges();
+      expect(buttonNamed('Decline seat')!.disabled).toBe(true);
+      buttonNamed('Decline seat')!.click();
+      fixture.detectChanges();
+      expect(text()).not.toContain('Decline the seat offered');
+
+      http.expectOne('http://localhost:3000/api/registrations/accept_offer').flush({ ...offered, status: 'confirmed' });
+      respond({ upcoming: [{ ...offered, status: 'confirmed' }], past: [] });
+    });
+
     it('asks before leaving the line', () => {
       respond({ upcoming: [waiting], past: [] });
 

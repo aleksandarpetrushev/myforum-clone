@@ -33,6 +33,11 @@ export class EventDetailComponent {
     const registration = this.event()?.my_registration;
     return registration && ['confirmed', 'waitlisted', 'offered'].includes(registration.status) ? registration : null;
   });
+  // The server closes the line one hour before the start (MF-202); this only decides which button to show.
+  readonly lineClosed = computed(() => {
+    const event = this.event();
+    return !!event && new Date(event.starts_at).getTime() - Date.now() <= 60 * 60 * 1000;
+  });
   readonly busy = signal(false);
   // Only the organizer's admins may cancel, and only a published event that has not started.
   readonly canCancel = computed(() => {

@@ -137,6 +137,21 @@ describe('EventDetailComponent', () => {
       expect(button('Join waitlist')).toBeDefined();
     });
 
+    it('lets someone in line register when a seat is free in the last hour', () => {
+      render({ ...published, capacity: 10, reserved_spots: 9, my_registration: { id: 40, status: 'waitlisted', waitlist_position: 1 } }, []);
+
+      expect(fixture.nativeElement.textContent).toContain('A seat is free.');
+      expect(button('Register')).toBeDefined();
+      expect(button('Leave waitlist')).toBeDefined();
+    });
+
+    it('shows a closed waitlist instead of a Join button in the last hour', () => {
+      render({ ...full, starts_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() }, []);
+
+      expect(button('Join waitlist')).toBeUndefined();
+      expect(fixture.nativeElement.textContent).toContain('its waitlist closed');
+    });
+
     it("shows the organizer's admins the waitlist count", () => {
       render({ ...full, waitlist_count: 7 }, [{ id: 1, name: 'Atlas' }]);
 
