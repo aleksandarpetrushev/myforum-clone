@@ -119,7 +119,8 @@ func (p *Postgres) Apply(ctx context.Context, incoming Incoming) error {
 
 func (p *Postgres) applyTx(ctx context.Context, tx *sql.Tx, incoming Incoming) error {
 	switch incoming.EventType {
-	case "EventPublished", "EventUpdated", "EventCancelled", "RegistrationCreated", "RegistrationCancelled":
+	case "EventPublished", "EventUpdated", "EventCancelled", "RegistrationCreated", "RegistrationCancelled",
+		"WaitlistOffered", "WaitlistOfferExpired":
 		snapshot, _ := incoming.Payload["event"].(map[string]any)
 		if snapshot == nil {
 			return nil
