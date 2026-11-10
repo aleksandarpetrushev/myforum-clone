@@ -3,7 +3,16 @@ class SendNotificationJob < ApplicationJob
 
   COPY = {
     "RegistrationCreated" => ["registration_confirmed", "Registration confirmed", "You are registered for %s."],
-    "RegistrationCancelled" => ["registration_cancelled", "Registration cancelled", "Your registration for %s was cancelled."]
+    "RegistrationCancelled" => ["registration_cancelled", "Registration cancelled", "Your registration for %s was cancelled."],
+    # Waitlist kinds have no preference column, so they are always sent: an offer asks the person to act (MF-202).
+    "WaitlistOffered" => [
+      "waitlist_offered", "A seat opened for you",
+      "A seat opened for %s. Confirm it in My registrations before the offer passes to the next person in line."
+    ],
+    "WaitlistOfferExpired" => [
+      "waitlist_offer_expired", "Seat offer expired",
+      "Your seat offer for %s expired, so it went to the next person in line."
+    ]
   }.freeze
 
   def perform(outbox_event_id)
