@@ -1,6 +1,4 @@
 module Personalization
-  class DeliveryError < StandardError; end
-
   class DeliverEvent
     # Returns :delivered, :deferred, or :skipped when delivery is switched off; raises DeliveryError otherwise.
     def self.call(outbox_event)
