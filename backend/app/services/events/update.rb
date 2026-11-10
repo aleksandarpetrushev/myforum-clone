@@ -27,6 +27,8 @@ module Events
 
         @event.revision += 1
         @event.save!
+        # Read now: the reload below for the snapshot forgets what this save changed.
+        raised_capacity = capacity_raised?
         Events::AllowedOrganizations.replace(@event, allowed_ids) if organizations_changed
         # create!, not record!: with the lock and the revision a repeated key cannot happen, so if one does it must
         # fail loudly rather than return the earlier row and drop this change.
@@ -38,6 +40,8 @@ module Events
           payload: { "event" => @event.reload.snapshot }
         )
         Events::Publication.record!(@event) if !was_published && @event.status == "published"
+        # More seats: offer them to the line in the same transaction, before a direct registration can take them.
+        @offers = Waitlist::OfferFreedSeats.call(@event) if raised_capacity
       end
       return @event unless changed
 
@@ -46,7 +50,17 @@ module Events
       @event
     end
 
+    # Waitlist registrations this update offered a seat to (MF-202).
+    def offers
+      @offers || []
+    end
+
     private
+
+    def capacity_raised?
+      before, after = @event.saved_change_to_capacity
+      before && after && after > before
+    end
 
     def extract_allowed_ids
       return nil unless @attributes.key?("allowed_organization_ids")
