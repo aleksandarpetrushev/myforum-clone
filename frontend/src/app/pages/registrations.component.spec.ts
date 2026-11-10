@@ -164,4 +164,69 @@ describe('RegistrationsComponent', () => {
 
     expect(text()).toContain('Registration cancelled.');
   });
+  describe('waitlist (MF-202)', () => {
+    const waiting = { ...tomorrow, id: 30, status: 'waitlisted', waitlist_position: 2 };
+    const offered = { ...tomorrow, id: 31, event_id: 7, status: 'offered', offer_expires_at: '2026-11-12T18:00:00.000Z',
+      event: eventSummary(7, 'Offered session', '2026-11-24T09:00:00.000Z', '2026-11-24T10:00:00.000Z') };
+
+    it('labels a place in line and an offer in Upcoming, with the right buttons', () => {
+      respond({ upcoming: [waiting, offered], past: [] });
+
+      const [waitingCard, offeredCard] = [...section('Upcoming').querySelectorAll('article')] as HTMLElement[];
+      expect(waitingCard.textContent).toContain('Waitlist #2');
+      expect(buttonNamed('Leave waitlist', waitingCard)).toBeDefined();
+      expect(offeredCard.textContent).toContain('Seat offered: confirm by');
+      expect(buttonNamed('Confirm seat', offeredCard)).toBeDefined();
+      expect(buttonNamed('Decline seat', offeredCard)).toBeDefined();
+    });
+
+    it('confirms an offered seat and reloads', () => {
+      respond({ upcoming: [offered], past: [] });
+
+      buttonNamed('Confirm seat')!.click();
+      const accept = http.expectOne('http://localhost:3000/api/registrations/accept_offer');
+      expect(accept.request.body).toEqual({ event_id: 7 });
+      accept.flush({ ...offered, status: 'confirmed' });
+      respond({ upcoming: [{ ...offered, status: 'confirmed' }], past: [] });
+
+      expect(text()).toContain('Your seat is confirmed.');
+    });
+
+    it('blocks Decline while a seat is being confirmed', () => {
+      respond({ upcoming: [offered], past: [] });
+
+      buttonNamed('Confirm seat')!.click();
+      fixture.detectChanges();
+      expect(buttonNamed('Decline seat')!.disabled).toBe(true);
+      buttonNamed('Decline seat')!.click();
+      fixture.detectChanges();
+      expect(text()).not.toContain('Decline the seat offered');
+
+      http.expectOne('http://localhost:3000/api/registrations/accept_offer').flush({ ...offered, status: 'confirmed' });
+      respond({ upcoming: [{ ...offered, status: 'confirmed' }], past: [] });
+    });
+
+    it('asks before leaving the line', () => {
+      respond({ upcoming: [waiting], past: [] });
+
+      buttonNamed('Leave waitlist')!.click();
+      fixture.detectChanges();
+
+      expect(text()).toContain('Leave the waitlist for Forum session 6: Energy?');
+    });
+
+    it('labels an expired offer and a line that closed in Past', () => {
+      respond({
+        upcoming: [],
+        past: [
+          { ...tomorrow, id: 41, status: 'cancelled', cancelled_by: 'offer_expired' },
+          { ...tomorrow, id: 42, status: 'offered' },
+          { ...tomorrow, id: 43, status: 'waitlisted' },
+        ],
+      });
+
+      const labels = [...section('Past').querySelectorAll('article strong')].map((s: Element) => s.textContent?.trim());
+      expect(labels).toEqual(['Offer expired', 'Offer expired', 'Waitlist closed']);
+    });
+  });
 });

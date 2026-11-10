@@ -28,37 +28,24 @@ module Events
           registration.lifecycle_version += 1
           registration.cancelled_by = nil
           registration.reconfirm!
-        elsif registration.confirmed? || registration.failed?
-          raise AlreadyRegistered
+        elsif registration.waitlisted?
+          # A free seat while someone is still in line only happens in the last hour, when the line is closed
+          # and seats go to whoever registers first (MF-202). The person in line may take it too.
+          raise EventFull if event.reserved_spots >= event.capacity
+
+          registration.confirm_from_waitlist!
         else
+          # confirmed, failed, or offered: an offer is accepted through Waitlist::AcceptOffer.
           raise AlreadyRegistered
         end
 
         event.update!(reserved_spots: event.reserved_spots + 1, revision: event.revision + 1)
-        record_created(event, registration)
+        Registrations::ChangeEvent.record!("RegistrationCreated", event, registration)
       end
 
       registration
     rescue ActiveRecord::RecordNotUnique
       raise AlreadyRegistered
-    end
-
-    private
-
-    def record_created(event, registration)
-      OutboxEvent.record!(
-        event_type: "RegistrationCreated",
-        aggregate_type: "Registration",
-        aggregate_id: registration.id,
-        idempotency_key: "registration_created:#{registration.id}:#{registration.lifecycle_version}",
-        payload: {
-          "registration_id" => registration.id,
-          "user_id" => @user.id,
-          "event_id" => event.id,
-          "user_location" => @user.location,
-          "event" => event.snapshot
-        }
-      )
     end
   end
 end

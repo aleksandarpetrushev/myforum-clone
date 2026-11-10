@@ -69,3 +69,27 @@ An organizer admin cancels a published event that has not started with `POST /ap
 The dispatcher hands `EventCancelled` to `CancelEventRegistrationsJob`. For each confirmed registration, in its own transaction, the job locks the registration, then the user. It cancels the registration with `cancelled_by: "organizer"` and, unless the user switched off `event_cancelled_enabled`, writes one `event_cancelled` notification keyed `notification:event_cancelled:<registration id>`. A registration that is no longer confirmed is skipped, so reruns and a participant's own earlier cancel are left alone. No `RegistrationCancelled` row is written, so registrants get one notification, not two. The event row is not locked per registration; after the loop, one statement sets `reserved_spots` to the count of registrations still confirmed, and the cache is invalidated once. The job does nothing for an event that is not cancelled.
 
 Until the job reaches a registration it still reads `confirmed`; clients use the event's `status` in the registration's `event` summary to show the event as cancelled. Stuck cascades show up in `Metrics.cancelled_events_with_confirmed_registrations` and are resumed with `bin/rails events:resume_cancellations`.
+
+## Waitlist
+
+A full event has a waitlist (MF-202, ADR 0008). A place in line is a registration in the `waitlisted` state, and a seat offered from the line is `offered`. An offered seat counts in `reserved_spots`, so it is held: a direct registration finds the event full.
+
+```mermaid
+stateDiagram-v2
+  [*] --> waitlisted: join (event full)
+  cancelled --> waitlisted: join again
+  waitlisted --> offered: a seat frees up
+  offered --> confirmed: accept before the deadline
+  offered --> cancelled: decline, or the offer expires
+  waitlisted --> cancelled: leave the line
+  waitlisted --> confirmed: register directly in the last hour
+  confirmed --> cancelled: cancel
+```
+
+`POST /api/registrations/waitlist` joins the line: 201 for a new place, 200 when already waiting or offered, 409 `seats_available` when a seat is free, 409 `duplicate_registration` for a confirmed registrant, and 422 `waitlist_closed` within an hour of the start. The position is computed from `waitlisted_at` (then `id`) on each read.
+
+A seat freed by a cancelled registration, a declined offer, an expired offer or a capacity increase is offered in the same transaction, under the event lock, to as many people as there are free seats, first in line first. The offer lasts min(24 hours, half the time until the start), and nothing is offered in the last hour: a seat freed then goes to whoever registers first, including someone still in line. Each offer writes `WaitlistOffered` (the person is notified) and schedules `ExpireWaitlistOfferJob` at its deadline after the transaction commits.
+
+`POST /api/registrations/accept_offer` confirms an offer that has not lapsed and writes `RegistrationCreated`; the seat count does not change. `POST /api/registrations/cancel` leaves the line or declines an offer; neither notifies anyone. An expired offer becomes `cancelled` with `cancelled_by: "offer_expired"`, writes `WaitlistOfferExpired` (the person is notified), and offers the seat on. If an expiry job is lost, `Metrics.overdue_waitlist_offers` rises above 0; run `bin/rails waitlist:expire_overdue`.
+
+When an organizer cancels the event, the cascade cancels waitlisted and offered registrations too and tells each person once.

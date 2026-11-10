@@ -7,7 +7,7 @@ module Api
     def show
       event = policy_scope(Event).find(params[:id])
       authorize event
-      render json: Events::Cache.fetch_detail(event.id)
+      render json: Events::Cache.fetch_detail(event.id).merge(viewer_details(event))
     end
 
     def create
@@ -43,6 +43,17 @@ module Api
     end
 
     private
+
+    # Per-viewer additions to the shared cached detail (MF-202): never cached, because they differ by user.
+    def viewer_details(event)
+      registration = current_user.registrations.find_by(event_id: event.id)
+      details = {
+        "my_registration" => registration&.as_json_api(event_visible: false, waitlist_position: registration.waitlist_position)
+          &.slice("id", "status", "cancelled_by", "waitlist_position", "offer_expires_at")
+      }
+      details["waitlist_count"] = event.registrations.where(status: "waitlisted").count if EventPolicy.new(current_user, event).update?
+      details
+    end
 
     def render_event_started
       render_error(code: "event_started", message: "An event cannot be cancelled after it starts.", status: :unprocessable_entity)

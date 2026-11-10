@@ -45,6 +45,32 @@ module Api
       )
     end
 
+    # MF-202: joins the line for a full event. 201 for a new place in line, 200 when already in it.
+    def waitlist
+      event = policy_scope(Event).find(params[:event_id])
+      authorize event, :show?
+      result = Waitlist::Join.new(user: current_user, event: event).call
+      registration = result.registration
+      render json: registration.as_json_api(waitlist_position: registration.waitlist_position),
+             status: result.created ? :created : :ok
+    rescue Waitlist::Join::AlreadyRegistered
+      render_error(code: "duplicate_registration", message: "You are already registered for this event.", status: :conflict)
+    rescue Waitlist::Join::SeatsAvailable
+      render_error(code: "seats_available", message: "This event has free seats; register instead.", status: :conflict)
+    rescue Waitlist::Join::Closed
+      render_error(code: "waitlist_closed", message: "The waitlist closes one hour before the event starts.",
+                   status: :unprocessable_entity)
+    end
+
+    # Confirms a seat offered from the waitlist. Like cancel, it works on the caller's own row even if they can no
+    # longer see the event.
+    def accept_offer
+      registration = Waitlist::AcceptOffer.new(user: current_user, event: event_for_cancel).call
+      render json: registration.as_json_api(event_visible: EventPolicy.new(current_user, registration.event).show?)
+    rescue Waitlist::AcceptOffer::NoOffer
+      render_error(code: "no_offer", message: "You have no open seat offer for this event.", status: :unprocessable_entity)
+    end
+
     private
 
     # A caller who can no longer see the event can still cancel their own row.

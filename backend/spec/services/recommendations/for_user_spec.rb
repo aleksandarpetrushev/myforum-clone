@@ -79,11 +79,23 @@ RSpec.describe Recommendations::ForUser do
     expect(recommended).to eq([changed_mind.reload])
   end
 
-  it "leaves out a full event" do
+  it "recommends a full event, which can be joined through its waitlist (MF-202)" do
     full = event("Sold out")
     full.update!(capacity: 1, reserved_spots: 1)
     open = event("Open")
     go_ranks(full, open)
+
+    expect(recommended).to eq([full, open])
+  end
+
+  it "leaves out events the user is waiting in line for or has been offered a seat at" do
+    waiting = event("Waiting")
+    offered = event("Offered")
+    open = event("Open")
+    Registration.create!(user: user, event: waiting, status: "waitlisted", waitlisted_at: Time.current, lifecycle_version: 1)
+    Registration.create!(user: user, event: offered, status: "offered", waitlisted_at: Time.current, offered_at: Time.current,
+                         offer_expires_at: 1.day.from_now, lifecycle_version: 1)
+    go_ranks(waiting, offered, open)
 
     expect(recommended).to eq([open])
   end

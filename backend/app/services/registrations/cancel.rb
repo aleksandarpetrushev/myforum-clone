@@ -18,31 +18,33 @@ module Registrations
         registration = event.registrations.lock.find_by(user_id: @user.id)
         raise UserNotRegistered unless registration
 
-        if registration.can_cancel?
+        if registration.waitlisted?
+          # Leaving the line holds no seat, so nothing else changes and nobody is told.
+          Registrations::Cancellation.apply!(registration, by: "participant")
+        elsif registration.confirmed? || registration.offered?
           raise EventStarted if event.starts_at <= Time.current
           ensure_reserved_spot!(event, registration)
 
+          # A declined offer is recorded like any cancellation, so the personalization service sees the seat count
+          # even when nobody else is in line; declined_offer tells the notification job not to tell the decliner.
+          declined_offer = registration.offered?
           Registrations::Cancellation.apply!(registration, by: "participant")
           event.update!(reserved_spots: event.reserved_spots - 1, revision: event.revision + 1)
-          OutboxEvent.record!(
-            event_type: "RegistrationCancelled",
-            aggregate_type: "Registration",
-            aggregate_id: registration.id,
-            idempotency_key: "registration_cancelled:#{registration.id}:#{registration.lifecycle_version}",
-            payload: {
-              "registration_id" => registration.id,
-              "user_id" => @user.id,
-              "event_id" => event.id,
-              "user_location" => @user.location,
-              "event" => event.snapshot
-            }
-          )
+          Registrations::ChangeEvent.record!("RegistrationCancelled", event, registration,
+                                             declined_offer ? { "declined_offer" => true } : {})
+          @offers = Waitlist::OfferFreedSeats.call(event)
         elsif !registration.cancelled?
           raise InvalidState
         end
       end
 
+      Waitlist::ScheduleExpiry.call(offers)
       registration
+    end
+
+    # Waitlist registrations this cancel offered a seat to (MF-202).
+    def offers
+      @offers || []
     end
 
     private

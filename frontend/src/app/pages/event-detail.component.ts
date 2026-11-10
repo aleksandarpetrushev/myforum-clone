@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { catchError, of, switchMap } from 'rxjs';
+import { Observable, catchError, of, switchMap } from 'rxjs';
 import { AdminOrganizationsService } from '../core/admin-organizations.service';
 import { ForumApi } from '../core/forum-api';
 import { EventSummary } from '../core/models';
@@ -24,6 +24,21 @@ export class EventDetailComponent {
   readonly cancelling = signal(false);
 
   readonly cancelled = computed(() => this.event()?.status === 'cancelled');
+  readonly full = computed(() => {
+    const event = this.event();
+    return !!event && event.reserved_spots >= event.capacity;
+  });
+  // The viewer's own registration, if it is still active: registered, waiting in line, or offered a seat.
+  readonly mine = computed(() => {
+    const registration = this.event()?.my_registration;
+    return registration && ['confirmed', 'waitlisted', 'offered'].includes(registration.status) ? registration : null;
+  });
+  // The server closes the line one hour before the start (MF-202); this only decides which button to show.
+  readonly lineClosed = computed(() => {
+    const event = this.event();
+    return !!event && new Date(event.starts_at).getTime() - Date.now() <= 60 * 60 * 1000;
+  });
+  readonly busy = signal(false);
   // Only the organizer's admins may cancel, and only a published event that has not started.
   readonly canCancel = computed(() => {
     const event = this.event();
@@ -47,12 +62,41 @@ export class EventDetailComponent {
   }
 
   register(): void {
+    this.act((id) => this.api.register(id), 'You are registered.', 'Registration failed');
+  }
+
+  joinWaitlist(): void {
+    this.act((id) => this.api.joinWaitlist(id), 'You joined the waitlist.', 'Could not join the waitlist');
+  }
+
+  acceptOffer(): void {
+    this.act((id) => this.api.acceptOffer(id), 'Your seat is confirmed.', 'Could not confirm the seat');
+  }
+
+  // Leaving the line and declining an offer are both a cancel of the viewer's own registration.
+  leave(done: string): void {
+    this.act((id) => this.api.cancelRegistration(id), done, 'Could not do that');
+  }
+
+  // Each action reloads the event, so the seat count, the viewer's place in line and the buttons stay right.
+  private act(call: (eventId: number) => Observable<unknown>, done: string, failed: string): void {
     const event = this.event();
-    if (!event) return;
-    this.api.register(event.id).subscribe({
-      next: () => this.message.set('You are registered.'),
-      error: (error) => this.message.set(error?.error?.error?.message ?? 'Registration failed'),
-    });
+    if (!event || this.busy()) return;
+    this.busy.set(true);
+    this.message.set(null);
+    call(event.id)
+      .pipe(switchMap(() => this.api.event(event.id)))
+      .subscribe({
+        next: (updated) => {
+          this.event.set(updated);
+          this.message.set(done);
+          this.busy.set(false);
+        },
+        error: (error) => {
+          this.message.set(error?.error?.error?.message ?? failed);
+          this.busy.set(false);
+        },
+      });
   }
 
   askCancel(): void {

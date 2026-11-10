@@ -3,7 +3,7 @@ module Outbox
     # Returns what the personalization service did with the row: :delivered, :deferred or :skipped.
     def self.call(event)
       case event.event_type
-      when "RegistrationCreated", "RegistrationCancelled"
+      when "RegistrationCreated", "RegistrationCancelled", "WaitlistOffered", "WaitlistOfferExpired"
         SendNotificationJob.perform_later(event.id)
         RecordAnalyticsJob.perform_later(event.id)
       when "EventCancelled"

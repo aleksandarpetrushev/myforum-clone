@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ForumApi } from '../core/forum-api';
@@ -6,7 +6,7 @@ import { Registration } from '../core/models';
 
 @Component({
   selector: 'app-registrations',
-  imports: [RouterLink, NgTemplateOutlet],
+  imports: [RouterLink, NgTemplateOutlet, DatePipe],
   templateUrl: './registrations.component.html',
 })
 export class RegistrationsComponent {
@@ -17,13 +17,15 @@ export class RegistrationsComponent {
   readonly notice = signal<string | null>(null);
   readonly confirmingId = signal<number | null>(null);
   readonly cancellingId = signal<number | null>(null);
+  readonly acceptingId = signal<number | null>(null);
 
   constructor() {
     this.load();
   }
 
   askCancel(registration: Registration): void {
-    if (this.cancellingId() !== null) return;
+    // Not while a seat is being confirmed: accepting and declining the same offer must not race.
+    if (this.cancellingId() !== null || this.acceptingId() !== null) return;
     this.notice.set(null);
     this.error.set(null);
     this.confirmingId.set(registration.id);
@@ -62,8 +64,43 @@ export class RegistrationsComponent {
     return new Date(event.starts_at).getTime() <= now && now < new Date(event.ends_at).getTime();
   }
 
+  acceptOffer(registration: Registration): void {
+    if (this.acceptingId() !== null || this.cancellingId() !== null) return;
+    this.acceptingId.set(registration.id);
+    this.error.set(null);
+    this.notice.set(null);
+    this.api.acceptOffer(registration.event_id).subscribe({
+      next: () => {
+        this.load();
+        this.notice.set('Your seat is confirmed.');
+        this.acceptingId.set(null);
+      },
+      error: (error) => {
+        this.error.set(error?.error?.error?.message ?? 'Could not confirm the seat');
+        this.acceptingId.set(null);
+      },
+    });
+  }
+
+  // The cancel button and its question depend on what the registration is (MF-202).
+  cancelLabel(registration: Registration): string {
+    if (registration.status === 'waitlisted') return 'Leave waitlist';
+    if (registration.status === 'offered') return 'Decline seat';
+    return 'Cancel registration';
+  }
+
+  cancelQuestion(registration: Registration): string {
+    const title = registration.event?.title;
+    if (registration.status === 'waitlisted') return title ? `Leave the waitlist for ${title}?` : 'Leave this waitlist?';
+    if (registration.status === 'offered') return title ? `Decline the seat offered for ${title}?` : 'Decline this seat?';
+    return title ? `Cancel your registration for ${title}?` : 'Cancel this registration?';
+  }
+
   pastLabel(registration: Registration): string | null {
     if (registration.event?.status === 'cancelled' || registration.cancelled_by === 'organizer') return 'Event cancelled';
+    // An offer that ran out, whether or not its expiry job has run yet.
+    if (registration.cancelled_by === 'offer_expired' || registration.status === 'offered') return 'Offer expired';
+    if (registration.status === 'waitlisted') return 'Waitlist closed';
     if (registration.status === 'cancelled') return 'Cancelled';
     if (registration.status === 'failed') return 'Registration failed';
     return null;
