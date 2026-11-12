@@ -158,4 +158,47 @@ describe('EventDetailComponent', () => {
       expect(fixture.nativeElement.textContent).toContain('7 on the waitlist');
     });
   });
+  describe('a draft (MF-105)', () => {
+    const draft = { ...published, status: 'draft', my_registration: null };
+
+    it('is marked Not published, keeps Register visible but disabled, and says why', () => {
+      render(draft, [{ id: 1, name: 'Atlas' }]);
+
+      expect(fixture.nativeElement.textContent).toContain('Not published');
+      expect(button('Register')!.disabled).toBe(true);
+      expect(fixture.nativeElement.textContent).toContain('You can register once the event is published.');
+    });
+
+    it('lets the organization admin publish it, then shows it as published', () => {
+      render(draft, [{ id: 1, name: 'Atlas' }]);
+
+      button('Publish')!.click();
+      http.expectOne(`${api}/api/events/5/publish`).flush({ ...published, my_registration: null });
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Published. Participants will see it in discovery within a minute.');
+      expect(fixture.nativeElement.textContent).not.toContain('Not published');
+      expect(button('Register')!.disabled).toBe(false);
+    });
+
+    it("shows the server's reasons when it cannot be published", () => {
+      render(draft, [{ id: 1, name: 'Atlas' }]);
+
+      button('Publish')!.click();
+      http.expectOne(`${api}/api/events/5/publish`).flush(
+        { error: { code: 'validation_failed', details: { starts_at: ['has already passed, so the event cannot be published'] } } },
+        { status: 422, statusText: 'Unprocessable Entity' },
+      );
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Start time has already passed, so the event cannot be published.');
+      expect(fixture.nativeElement.textContent).toContain('Not published');
+    });
+
+    it('does not offer Publish to an admin of another organization', () => {
+      render(draft, [{ id: 9, name: 'Other' }]);
+
+      expect(button('Publish')).toBeUndefined();
+    });
+  });
 });

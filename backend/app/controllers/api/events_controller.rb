@@ -25,6 +25,15 @@ module Api
       render json: updated.as_detail_json
     end
 
+    # MF-105: publishes a draft. Events::Update checks and publishes in one transaction under the row lock, so a
+    # refusal (start passed, restricted with no allowed organizations, not a draft) is 422 with its reasons.
+    def publish
+      event = policy_scope(Event).find(params[:id])
+      authorize event, :update?
+      published = Events::Update.new(event: event, attributes: { "status" => "published" }).call
+      render json: published.as_detail_json.merge(viewer_details(published))
+    end
+
     def cancel
       event = policy_scope(Event).find(params[:id])
       authorize event

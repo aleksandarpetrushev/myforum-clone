@@ -36,5 +36,7 @@ en:
           attributes:
             ends_at:
               ends_before_start: "must be after starts_at"
+            starts_at:
+              already_started: "has already passed, so the event cannot be published"
             status:
               invalid_transition: "cannot change from its current status that way"

@@ -8,6 +8,7 @@ Rails.application.routes.draw do
     resources :events, only: [:index, :show, :create, :update, :destroy] do
       member do
         post :cancel
+        post :publish
       end
     end
     resources :organizations, only: :index
@@ -31,6 +32,7 @@ Rails.application.routes.draw do
       resources :registrations, only: :index
       resources :recommendations, only: :index
       resources :organizations, only: :index
+      resources :drafts, only: :index
       resources :notifications, only: :index do
         member do
           post :read

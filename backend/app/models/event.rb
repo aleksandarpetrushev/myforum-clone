@@ -21,6 +21,7 @@ class Event < ApplicationRecord
   validate :ends_after_start
   validate :spots_within_capacity
   validate :status_follows_machine
+  validate :not_published_after_start
 
   after_commit :invalidate_event_caches, on: %i[create update destroy]
 
@@ -98,6 +99,14 @@ class Event < ApplicationRecord
     }
   end
 
+  # The one definition of the MF-105 rule: an event cannot be published once its start has passed, since nobody could
+  # register. Applied to every act of publishing: a draft becoming published (validation below) and the API creating
+  # an event as published (Events::Create). Records created directly as published, such as seeds and imported
+  # history, are not publishing anything and are not checked.
+  def check_publishable_start(now = Time.current)
+    errors.add(:starts_at, :already_started) if starts_at.present? && starts_at <= now
+  end
+
   def as_detail_json
     as_list_json.merge(
       "description" => description,
@@ -126,6 +135,13 @@ class Event < ApplicationRecord
     allowed = status_transitions(from: status_was.to_sym, to: status.to_sym).any?
     allowed &&= cancelling_through_event if status == "cancelled"
     errors.add(:status, :invalid_transition) unless allowed
+  end
+
+  # A draft becoming published goes through the one publishing rule below (the publish endpoint and PATCH).
+  def not_published_after_start
+    return if new_record? || !status_changed? || status_was != "draft" || status != "published"
+
+    check_publishable_start
   end
 
   def spots_within_capacity

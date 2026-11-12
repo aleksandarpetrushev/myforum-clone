@@ -60,6 +60,15 @@ export class ForumApi {
     return this.http.post<Registration>(`${API_URL}/api/registrations`, { event_id: eventId });
   }
 
+  // MF-105: drafts of the organizations the user administers.
+  drafts(): Observable<{ data: EventSummary[] }> {
+    return this.http.get<{ data: EventSummary[] }>(`${API_URL}/api/me/drafts`);
+  }
+
+  publishEvent(eventId: number): Observable<EventSummary> {
+    return this.http.post<EventSummary>(`${API_URL}/api/events/${eventId}/publish`, {});
+  }
+
   joinWaitlist(eventId: number): Observable<Registration> {
     return this.http.post<Registration>(`${API_URL}/api/registrations/waitlist`, { event_id: eventId });
   }

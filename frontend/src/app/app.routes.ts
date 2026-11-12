@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth.guard';
 import { DiscoveryComponent } from './pages/discovery.component';
+import { DraftsComponent } from './pages/drafts.component';
 import { EventCreateComponent } from './pages/event-create.component';
 import { EventDetailComponent } from './pages/event-detail.component';
 import { LoginComponent } from './pages/login.component';
@@ -15,6 +16,7 @@ export const routes: Routes = [
   { path: 'events/new', component: EventCreateComponent, canActivate: [authGuard] },
   { path: 'events/:id', component: EventDetailComponent, canActivate: [authGuard] },
   { path: 'registrations', component: RegistrationsComponent, canActivate: [authGuard] },
+  { path: 'drafts', component: DraftsComponent, canActivate: [authGuard] },
   { path: 'topics', component: TopicsComponent, canActivate: [authGuard] },
   { path: 'notifications', component: NotificationsComponent, canActivate: [authGuard] },
   { path: '', pathMatch: 'full', redirectTo: 'events' },
