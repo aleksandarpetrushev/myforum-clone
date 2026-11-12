@@ -8,6 +8,7 @@ class Metrics
     registration_cancel_success_total
     registration_cancel_failure_total
     registration_cancel_invariant_violation_total
+    outbox_dispatch_failed_total
     recommendations_fetched_total
     recommendations_stale_total
     recommendations_unavailable_total
@@ -29,6 +30,20 @@ class Metrics
 
     def snapshot
       LOCK.synchronize { values.dup }
+    end
+
+    # Alert when above 120: rows are pending but none has been published for that long, whatever the cause (MF-204).
+    def outbox_stall_seconds(now = Time.current)
+      return 0 unless OutboxEvent.pending.exists?
+
+      last = OutboxEvent.where(status: "published").maximum(:published_at)
+      oldest = OutboxEvent.pending.minimum(:created_at)
+      (now - [last, oldest].compact.max).round
+    end
+
+    # Alert when above 0: a row has failed five times or more and keeps failing (MF-204).
+    def outbox_rows_failing
+      OutboxEvent.pending.where("attempts >= ?", 5).count
     end
 
     def outbox_pending_age_seconds

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_10_100000) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_12_100000) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_trgm"
@@ -143,6 +143,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_10_100000) do
     t.datetime "updated_at", null: false
     t.string "notification_outcome"
     t.integer "schema_version", default: 1, null: false
+    t.integer "attempts", default: 0, null: false
+    t.datetime "next_attempt_at"
+    t.string "last_error"
     t.index ["idempotency_key"], name: "index_outbox_events_on_idempotency_key", unique: true
     t.index ["status", "created_at"], name: "index_outbox_events_on_status_and_created_at"
     t.check_constraint "notification_outcome IS NULL OR (notification_outcome::text = ANY (ARRAY['delivered'::character varying, 'suppressed'::character varying]::text[]))", name: "outbox_events_notification_outcome_valid"
