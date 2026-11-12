@@ -21,6 +21,7 @@ class Event < ApplicationRecord
   validate :ends_after_start
   validate :spots_within_capacity
   validate :status_follows_machine
+  validate :not_published_after_start
 
   after_commit :invalidate_event_caches, on: %i[create update destroy]
 
@@ -126,6 +127,15 @@ class Event < ApplicationRecord
     allowed = status_transitions(from: status_was.to_sym, to: status.to_sym).any?
     allowed &&= cancelling_through_event if status == "cancelled"
     errors.add(:status, :invalid_transition) unless allowed
+  end
+
+  # A draft cannot become published once its start has passed: nobody could register (MF-105). Covers every way of
+  # publishing a saved draft (the publish endpoint and PATCH); Events::Create checks events created as published.
+  def not_published_after_start
+    return if new_record? || !status_changed? || status_was != "draft" || status != "published"
+    return if starts_at.blank? || starts_at > Time.current
+
+    errors.add(:starts_at, :already_started)
   end
 
   def spots_within_capacity

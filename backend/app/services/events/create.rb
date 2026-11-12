@@ -41,6 +41,10 @@ module Events
       if event.errors[:status].empty? && !CREATABLE_STATUSES.include?(event.status)
         event.errors.add(:status, :inclusion, value: event.status)
       end
+      # Created as published: the same rule the model applies when a draft is published later (MF-105).
+      if event.status == "published" && event.starts_at.present? && event.starts_at <= Time.current
+        event.errors.add(:starts_at, :already_started)
+      end
       Events::AllowedOrganizations.validate(event, allowed_ids, visibility: event.visibility)
       event.errors.add(:topic_ids, :invalid) if Topic.where(id: topic_ids).count != topic_ids.size
 
