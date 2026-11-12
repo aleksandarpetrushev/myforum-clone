@@ -4,6 +4,9 @@
     <a routerLink="/events">Events</a>
     <a routerLink="/topics">Topics</a>
     <a routerLink="/registrations">Registrations</a>
+    @if (adminOrganizations.canCreate()) {
+      <a routerLink="/drafts">My drafts</a>
+    }
     <a routerLink="/notifications">Notifications</a>
     <span>{{ auth.user()?.name }}</span>
     <a routerLink="/login" (click)="logout()">Log out</a>

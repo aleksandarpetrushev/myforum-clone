@@ -24,6 +24,14 @@ export class EventDetailComponent {
   readonly cancelling = signal(false);
 
   readonly cancelled = computed(() => this.event()?.status === 'cancelled');
+  readonly draft = computed(() => this.event()?.status === 'draft');
+  // Only the organizer's admins can open a draft at all; this decides whether they see Publish.
+  readonly canPublish = computed(() => {
+    const event = this.event();
+    if (!event || event.status !== 'draft') return false;
+    return this.adminOrganizations.organizations().some((organization) => organization.id === event.organization.id);
+  });
+  readonly publishProblems = signal<string[]>([]);
   readonly full = computed(() => {
     const event = this.event();
     return !!event && event.reserved_spots >= event.capacity;
@@ -63,6 +71,38 @@ export class EventDetailComponent {
 
   register(): void {
     this.act((id) => this.api.register(id), 'You are registered.', 'Registration failed');
+  }
+
+  publish(): void {
+    const event = this.event();
+    if (!event || this.busy()) return;
+    this.busy.set(true);
+    this.message.set(null);
+    this.publishProblems.set([]);
+    this.api.publishEvent(event.id).subscribe({
+      next: (updated) => {
+        this.event.set(updated);
+        this.message.set('Published. Participants will see it in discovery within a minute.');
+        this.busy.set(false);
+      },
+      error: (error) => {
+        this.publishProblems.set(EventDetailComponent.reasons(error?.error?.error?.details));
+        this.message.set(this.publishProblems().length ? null : 'Could not publish the event');
+        this.busy.set(false);
+      },
+    });
+  }
+
+  // The server's validation details, e.g. { starts_at: ['has already passed, …'] }, as sentences.
+  private static reasons(details: Record<string, string[]> | undefined): string[] {
+    const labels: Record<string, string> = {
+      starts_at: 'Start time',
+      allowed_organization_ids: 'Allowed organizations',
+      status: 'Status',
+    };
+    return Object.entries(details ?? {}).flatMap(([field, messages]) =>
+      messages.map((message) => `${labels[field] ?? field} ${message}.`),
+    );
   }
 
   joinWaitlist(): void {

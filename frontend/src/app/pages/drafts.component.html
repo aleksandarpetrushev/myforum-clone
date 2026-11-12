@@ -1,0 +1,18 @@
+<h1>My drafts</h1>
+<p class="muted">Events your organizations have saved but not published. Only your organizations' admins can see them.</p>
+@if (loading()) {
+  <p>Loading drafts…</p>
+}
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+@for (draft of drafts(); track draft.id) {
+  <article class="card">
+    <h2><a [routerLink]="['/events', draft.id]">{{ draft.title }}</a></h2>
+    <p class="muted"><strong>Not published</strong> · {{ draft.starts_at }} · {{ draft.organization.name }}</p>
+  </article>
+} @empty {
+  @if (!loading() && !error()) {
+    <p class="muted">No drafts</p>
+  }
+}

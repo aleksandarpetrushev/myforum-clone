@@ -4,6 +4,9 @@
 }
 @if (event(); as current) {
   <h1>{{ current.title }}</h1>
+  @if (draft()) {
+    <p class="error"><strong>Not published</strong>. Only your organization's admins can see this event.</p>
+  }
   @if (cancelled()) {
     <p class="error"><strong>Cancelled</strong> on {{ current.cancelled_at | date: 'mediumDate' }}</p>
   }
@@ -21,7 +24,17 @@
   @if (current.waitlist_count !== undefined) {
     <p class="muted">{{ current.waitlist_count }} on the waitlist</p>
   }
-  @if (!cancelled()) {
+  @if (draft()) {
+    <!-- Kept visible but disabled, with the reason as text: a disabled button shows no tooltip (MF-105). -->
+    <button type="button" disabled>Register</button>
+    <p class="muted">You can register once the event is published.</p>
+    @if (canPublish()) {
+      <button type="button" (click)="publish()" [disabled]="busy()">Publish</button>
+      @for (problem of publishProblems(); track problem) {
+        <p class="error">{{ problem }}</p>
+      }
+    }
+  } @else if (!cancelled()) {
     @if (mine(); as registration) {
       @switch (registration.status) {
         @case ('confirmed') {
