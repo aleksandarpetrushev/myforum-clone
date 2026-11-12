@@ -60,7 +60,7 @@ Outbox idempotency keys include `lifecycle_version`, so a later create or cancel
 
 Duplicate registration returns 409 `duplicate_registration`. A full event returns 409 `event_full`. There is no payment step. New registrations are stored as `confirmed`. `failed` remains on the column and cannot be cancelled or reopened.
 
-`ProcessOutboxJob` marks a row published only after dispatch returns. Notification and analytics inserts ignore a repeated idempotency key. The Go service does the same with `processed_events`.
+`ProcessOutboxJob` marks a row published only after dispatch returns. If dispatch raises, for example because the personalization service is down, the row stays pending with `attempts`, `last_error` and a `next_attempt_at` that backs off from 2 seconds to 5 minutes, and the pass carries on with other rows. Later rows with the same ordering key (the same event, or the same user's topic follows) wait behind it, so they still arrive in order (MF-204). Notification and analytics inserts ignore a repeated idempotency key. The Go service does the same with `processed_events`.
 
 ## Organizer cancellation
 

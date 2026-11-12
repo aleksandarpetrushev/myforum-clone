@@ -41,12 +41,13 @@ RSpec.describe "deferred outbox rows" do
     expect(Metrics.outbox_deferred_count).to eq(1)
   end
 
-  it "still stops on any other error, as before" do
+  it "keeps a row that fails with any other error pending, to retry, without raising (MF-204)" do
     Events::Register.new(user: user, event: event).call
     go_answers([422, "invalid_json"])
 
-    expect { Outbox::Publisher.new.call }.to raise_error(Personalization::DeliveryError)
-    expect(OutboxEvent.last.status).to eq("pending")
+    expect { Outbox::Publisher.new.call }.not_to raise_error
+    expect(OutboxEvent.last).to have_attributes(status: "pending", attempts: 1)
+    expect(OutboxEvent.last.last_error).to include("DeliveryError")
   end
 
   it "publishes deferred rows once Go can read them, and leaves the others deferred" do

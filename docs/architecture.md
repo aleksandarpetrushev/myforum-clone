@@ -69,7 +69,7 @@ Registration commits the registration, the capacity increment, and the outbox ro
 
 Request logs are JSON and include `request_id`, `user_id`, `duration_ms`, and `event_id` or `registration_id` when the request has them. Passwords and tokens are not logged.
 
-`Metrics` keeps in-process counters for request count, request duration, and registration success or failure. Outbox lag is `Metrics.outbox_pending_age_seconds`. `Metrics.cancelled_events_with_confirmed_registrations` counts cancelled events whose registration cascade has not finished; if it stays above 0, run `bin/rails events:resume_cancellations`. Sidekiq queue depth is available from Sidekiq's own API when Redis is up. These are names to scrape later. This version does not run Prometheus.
+`Metrics` keeps in-process counters for request count, request duration, and registration success or failure. Outbox lag is `Metrics.outbox_pending_age_seconds`. Two outbox alerts come from MF-204: page when `Metrics.outbox_stall_seconds` is above 120 (rows pending, none published for two minutes, whatever the cause), and when `Metrics.outbox_rows_failing` is above 0 (a row has failed five times and keeps failing; its `last_error` says why). `Metrics.cancelled_events_with_confirmed_registrations` counts cancelled events whose registration cascade has not finished; if it stays above 0, run `bin/rails events:resume_cancellations`. Sidekiq queue depth is available from Sidekiq's own API when Redis is up. These are names to scrape later. This version does not run Prometheus.
 
 ## What this version leaves open
 

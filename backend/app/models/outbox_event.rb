@@ -14,6 +14,15 @@ class OutboxEvent < ApplicationRecord
   scope :pending, -> { where(status: "pending") }
   scope :deferred, -> { where(status: "deferred") }
 
+  # Rows with the same key must reach their consumers in order: a user's topic follows and unfollows, and an event's
+  # changes. When one row is waiting to retry, later rows with its key wait too (MF-204).
+  def ordering_key
+    case event_type
+    when "TopicFollowed", "TopicUnfollowed" then "user:#{payload["user_id"]}"
+    else "event:#{payload["event_id"] || payload.dig("event", "id") || aggregate_id}"
+    end
+  end
+
   def self.record!(attrs)
     create!(attrs)
   rescue ActiveRecord::RecordNotUnique
