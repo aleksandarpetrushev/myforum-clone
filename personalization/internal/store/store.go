@@ -42,6 +42,11 @@ type Incoming struct {
 
 type Store interface {
 	Apply(ctx context.Context, incoming Incoming) error
-	Candidates(ctx context.Context, userID int64, now time.Time) ([]Event, Profile, error)
+	// Profile is what ranking needs to know about the user.
+	Profile(ctx context.Context, userID int64) (Profile, error)
+	// EachCandidate calls visit once for every event the user may be recommended. It streams instead of returning
+	// a list, so a caller keeps only what it needs: holding every eligible event per request ran the service out
+	// of memory on 12 November (MF-204).
+	EachCandidate(ctx context.Context, userID int64, now time.Time, visit func(Event)) error
 	Ping(ctx context.Context) error
 }

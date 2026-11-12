@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -181,11 +183,36 @@ func upsertLocation(ctx context.Context, tx *sql.Tx, userID int64, location stri
 	return nil
 }
 
-func (p *Postgres) Candidates(ctx context.Context, userID int64, now time.Time) ([]Event, Profile, error) {
+func (p *Postgres) Profile(ctx context.Context, userID int64) (Profile, error) {
+	profile := Profile{}
+	userTopics, err := p.db.QueryContext(ctx, `SELECT topic_id FROM personalization.user_topics WHERE user_id = $1`, userID)
+	if err != nil {
+		return Profile{}, fmt.Errorf("query user topics: %w", err)
+	}
+	defer userTopics.Close()
+	for userTopics.Next() {
+		var topicID int64
+		if err := userTopics.Scan(&topicID); err != nil {
+			return Profile{}, fmt.Errorf("scan user topic: %w", err)
+		}
+		profile.TopicIDs = append(profile.TopicIDs, topicID)
+	}
+	if err := userTopics.Err(); err != nil {
+		return Profile{}, fmt.Errorf("user topic rows: %w", err)
+	}
+	_ = p.db.QueryRowContext(ctx, `SELECT location FROM personalization.user_locations WHERE user_id = $1`, userID).Scan(&profile.Location)
+	return profile, nil
+}
+
+// EachCandidate reads one event at a time, with its topics aggregated by the query, so memory does not grow with
+// the number of eligible events.
+func (p *Postgres) EachCandidate(ctx context.Context, userID int64, now time.Time, visit func(Event)) error {
 	rows, err := p.db.QueryContext(ctx, `
-		SELECT pe.id, pe.title, pe.location, pe.starts_at, pe.status, pe.reserved_spots, pe.capacity
+		SELECT pe.id, pe.title, pe.location, pe.starts_at, pe.status, pe.reserved_spots, pe.capacity,
+		       COALESCE(string_agg(et.topic_id::text, ','), '')
 		FROM personalization.events pe
 		INNER JOIN public.events e ON e.id = pe.id
+		LEFT JOIN personalization.event_topics et ON et.event_id = pe.id
 		WHERE pe.status = 'published'
 		  AND pe.starts_at > $1
 		  AND (
@@ -209,67 +236,41 @@ func (p *Postgres) Candidates(ctx context.Context, userID int64, now time.Time) 
 		        AND om.role = 'admin'
 		    )
 		  )
+		GROUP BY pe.id
 	`, now, userID, userID)
 	if err != nil {
-		return nil, Profile{}, fmt.Errorf("query events: %w", err)
+		return fmt.Errorf("query events: %w", err)
 	}
 	defer rows.Close()
 
-	events := []Event{}
-	ids := []int64{}
 	for rows.Next() {
 		var event Event
-		if err := rows.Scan(&event.ID, &event.Title, &event.Location, &event.StartsAt, &event.Status, &event.ReservedSpots, &event.Capacity); err != nil {
-			return nil, Profile{}, fmt.Errorf("scan event: %w", err)
+		var topics string
+		if err := rows.Scan(&event.ID, &event.Title, &event.Location, &event.StartsAt, &event.Status,
+			&event.ReservedSpots, &event.Capacity, &topics); err != nil {
+			return fmt.Errorf("scan event: %w", err)
 		}
-		events = append(events, event)
-		ids = append(ids, event.ID)
+		event.TopicIDs = parseIDs(topics)
+		visit(event)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, Profile{}, fmt.Errorf("events rows: %w", err)
+		return fmt.Errorf("events rows: %w", err)
 	}
+	return nil
+}
 
-	topicsByEvent := map[int64][]int64{}
-	if len(ids) > 0 {
-		topicRows, err := p.db.QueryContext(ctx, `
-			SELECT event_id, topic_id
-			FROM personalization.event_topics
-			WHERE event_id = ANY($1)
-		`, ids)
-		if err != nil {
-			return nil, Profile{}, fmt.Errorf("query event topics: %w", err)
-		}
-		defer topicRows.Close()
-		for topicRows.Next() {
-			var eventID, topicID int64
-			if err := topicRows.Scan(&eventID, &topicID); err != nil {
-				return nil, Profile{}, fmt.Errorf("scan event topic: %w", err)
-			}
-			topicsByEvent[eventID] = append(topicsByEvent[eventID], topicID)
-		}
-		if err := topicRows.Err(); err != nil {
-			return nil, Profile{}, fmt.Errorf("event topic rows: %w", err)
+func parseIDs(list string) []int64 {
+	if list == "" {
+		return nil
+	}
+	parts := strings.Split(list, ",")
+	ids := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		if id, err := strconv.ParseInt(part, 10, 64); err == nil {
+			ids = append(ids, id)
 		}
 	}
-	for index := range events {
-		events[index].TopicIDs = topicsByEvent[events[index].ID]
-	}
-
-	profile := Profile{}
-	userTopics, err := p.db.QueryContext(ctx, `SELECT topic_id FROM personalization.user_topics WHERE user_id = $1`, userID)
-	if err != nil {
-		return nil, Profile{}, fmt.Errorf("query user topics: %w", err)
-	}
-	defer userTopics.Close()
-	for userTopics.Next() {
-		var topicID int64
-		if err := userTopics.Scan(&topicID); err != nil {
-			return nil, Profile{}, fmt.Errorf("scan user topic: %w", err)
-		}
-		profile.TopicIDs = append(profile.TopicIDs, topicID)
-	}
-	_ = p.db.QueryRowContext(ctx, `SELECT location FROM personalization.user_locations WHERE user_id = $1`, userID).Scan(&profile.Location)
-	return events, profile, nil
+	return ids
 }
 
 // upsertEvent stores a snapshot unless a newer one is already stored. Every change in Rails takes the next

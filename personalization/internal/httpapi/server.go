@@ -59,14 +59,20 @@ func (s *Server) recommendations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := s.now()
-	events, profile, err := s.Store.Candidates(r.Context(), userID, now)
+	var ranked []ranking.Recommendation
+	profile, err := s.Store.Profile(r.Context(), userID)
+	if err == nil {
+		top := ranking.NewTopK(limit, profile, now)
+		err = s.Store.EachCandidate(r.Context(), userID, now, top.Offer)
+		if err == nil {
+			ranked = top.Results()
+		}
+	}
 	if err != nil {
 		s.Log.Error("recommendations failed", "error", err.Error(), "user_id", userID)
 		writeError(w, http.StatusInternalServerError, "recommendations_failed", "Could not load recommendations")
 		return
 	}
-
-	ranked := ranking.Rank(events, profile, now, limit)
 	data := make([]map[string]any, 0, len(ranked))
 	for _, item := range ranked {
 		data = append(data, map[string]any{

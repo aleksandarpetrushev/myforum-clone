@@ -96,7 +96,7 @@ func (m *Memory) SetMemberships(userID int64, memberships []Membership) {
 	m.memberships[userID] = append([]Membership(nil), memberships...)
 }
 
-func (m *Memory) Candidates(_ context.Context, userID int64, now time.Time) ([]Event, Profile, error) {
+func (m *Memory) Profile(_ context.Context, userID int64) (Profile, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -104,8 +104,13 @@ func (m *Memory) Candidates(_ context.Context, userID int64, now time.Time) ([]E
 	for topicID := range m.userTopic[userID] {
 		profile.TopicIDs = append(profile.TopicIDs, topicID)
 	}
+	return profile, nil
+}
 
-	var events []Event
+func (m *Memory) EachCandidate(_ context.Context, userID int64, now time.Time, visit func(Event)) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	for _, event := range m.events {
 		if event.Status != "published" || !event.StartsAt.After(now) {
 			continue
@@ -114,9 +119,20 @@ func (m *Memory) Candidates(_ context.Context, userID int64, now time.Time) ([]E
 		if !CanSee(event, m.memberships[userID]) {
 			continue
 		}
-		events = append(events, event)
+		visit(event)
 	}
-	return events, profile, nil
+	return nil
+}
+
+// Candidates collects EachCandidate into a list, for tests.
+func (m *Memory) Candidates(ctx context.Context, userID int64, now time.Time) ([]Event, Profile, error) {
+	profile, err := m.Profile(ctx, userID)
+	if err != nil {
+		return nil, Profile{}, err
+	}
+	var events []Event
+	err = m.EachCandidate(ctx, userID, now, func(event Event) { events = append(events, event) })
+	return events, profile, err
 }
 
 func eventFromSnapshot(snapshot map[string]any) Event {
