@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Observable, catchError, of, switchMap } from 'rxjs';
+import { Observable, catchError, of, switchMap, tap } from 'rxjs';
 import { AdminOrganizationsService } from '../core/admin-organizations.service';
 import { ForumApi } from '../core/forum-api';
 import { EventSummary } from '../core/models';
@@ -59,6 +59,11 @@ export class EventDetailComponent {
 
     this.route.paramMap
       .pipe(
+        // The page is reused when the id changes: feedback about the previous event must not carry over.
+        tap(() => {
+          this.message.set(null);
+          this.publishProblems.set([]);
+        }),
         switchMap((params) => this.api.event(Number(params.get('id')))),
         catchError(() => {
           this.error.set('Event not found');
