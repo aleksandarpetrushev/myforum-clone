@@ -1,0 +1,127 @@
+# MF-301: every PR runs all three test suites. Tests block the merge; the AI review is advisory.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Rails + Go Postgres store
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      RAILS_ENV: test
+      DATABASE_HOST: localhost
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: backend
+          bundler-cache: true
+      - name: Load the schema
+        working-directory: backend
+        run: bin/rails db:create db:schema:load
+      - name: RSpec
+        working-directory: backend
+        run: timeout 900 bundle exec rspec
+      # The Postgres store joins Rails tables (public.events), so it runs here, against the schema Rails just loaded.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: personalization/go.mod
+          cache-dependency-path: personalization/go.sum
+      - name: Go Postgres store test
+        working-directory: personalization
+        env:
+          PERSONALIZATION_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/my_forum_test?sslmode=disable
+        run: go test ./internal/store -run Postgres -v
+
+  personalization:
+    name: Go
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: personalization/go.mod
+          cache-dependency-path: personalization/go.sum
+      - name: go vet
+        working-directory: personalization
+        run: go vet ./...
+      - name: go test
+        working-directory: personalization
+        run: go test ./...
+
+  frontend:
+    name: Angular
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - name: Build
+        working-directory: frontend
+        run: npx ng build
+      - name: Karma
+        working-directory: frontend
+        run: npm test -- --watch=false --browsers=ChromeHeadless
+
+  # Advisory: comments on the PR, never blocks it (docs/ai-working-agreement.md). Skipped until the
+  # repository has an ANTHROPIC_API_KEY secret, and for PRs from forks, which cannot read secrets.
+  ai-review:
+    name: AI review (advisory)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - if: env.HAS_KEY != 'true'
+        run: echo "No ANTHROPIC_API_KEY secret; skipping the AI review."
+      - if: env.HAS_KEY == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - if: env.HAS_KEY == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this pull request's diff against main. Follow CLAUDE.md and the CLAUDE.md of each app the diff touches.
+            Report only correctness bugs, broken invariants from those files (visibility through EventPolicy, seat locking,
+            outbox in the same transaction, revision bumps, contract rules) and missing tests for a changed rule.
+            Leave one PR comment: findings ranked most severe first, each with file:line and a concrete failure scenario.
+            If there are none, say so in one line. Do not comment on style.
