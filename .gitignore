@@ -21,3 +21,6 @@
 
 # Rails master key lives in backend/.gitignore as well.
 /backend/config/master.key
+
+# Claude Code: personal settings stay local; .claude/settings.json is shared.
+/.claude/settings.local.json
