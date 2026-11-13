@@ -13,7 +13,8 @@ concurrency:
 jobs:
   backend:
     name: Rails + Go Postgres store
-    runs-on: ubuntu-latest
+    # setup-ruby has no prebuilt Ruby 3.2.2 for ubuntu-26.04 (ubuntu-latest). Move up with the Ruby upgrade.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
