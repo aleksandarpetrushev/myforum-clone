@@ -55,4 +55,6 @@ The consumer goes first, so Rails never writes a version Go cannot read.
 
 6. Only when that is 0: remove version 1 from this service and deploy it again. Remove `v1/` in the same change.
 
+**Before step 1, confirm the alert on `Metrics.outbox_deferred_count` is in place** (above 0 for 15 minutes; `docs/architecture.md`). Deferred rows are not retried automatically: the alert is what tells someone to deploy the right build and redeliver.
+
 If step 4 runs before step 3, or this service is rolled back to a build without version 2, it answers every version 2 row with `unsupported_contract`. Rails keeps those rows as `deferred`, and nothing is lost: deploy a service that reads version 2, then run `bin/rails outbox:redeliver_deferred`.

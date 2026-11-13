@@ -41,7 +41,7 @@ Whoever opens the PR answers for every line in it, whoever typed it. "The AI wro
 |---|---|---|
 | Matching spec, Go package or type-check after every AI edit | `.claude/hooks/run-matching-tests.sh` | Feeds failures back to the AI |
 | RSpec, Go tests (including the Postgres store), Angular build and Karma | `.github/workflows/ci.yml` | Yes |
-| AI review comment on the PR | `ci.yml`, job `ai-review` | No. Findings are advisory; the reviewer decides which become fixes. Promote a category to blocking only after a sprint of it being right |
+| AI review comment on the PR | `ci.yml`, job `ai-review` | No. Findings are advisory; the reviewer decides which become fixes. Promote a category to blocking only after a sprint of it being right. Decided by the engineer, 2026-11-13: tests block, the AI review advises |
 | Outbox row matches the Rails–Go contract | `spec/support/personalization_contract.rb` | Yes, through RSpec |
 
 ## Learning from mistakes
