@@ -421,7 +421,7 @@ module Bench
         response = connection.request(request)
         ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - sent) * 1000
         status = response.code.to_i
-        code = status >= 400 ? (JSON.parse(response.body)["code"] rescue nil) : nil
+        code = status >= 400 ? (JSON.parse(response.body).dig("error", "code") rescue nil) : nil
         { status: status, code: code, ms: ms, sent_at: sent }
       rescue StandardError => error
         close
