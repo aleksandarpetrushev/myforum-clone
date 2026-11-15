@@ -27,6 +27,19 @@ namespace :bench do
     puts "wrote #{path}"
   end
 
+  desc "MF-302: the programme-publish rush with Puma, Sidekiq and Go. BENCH_RUSH_SCALE (1.0) BENCH_RUSH_MINUTES (10) WEB_CONCURRENCY (2)"
+  task rush: :environment do
+    ENV["WEB_CONCURRENCY"] ||= "2"
+    report = Bench::Rush.run!(
+      scale: Float(ENV.fetch("BENCH_RUSH_SCALE", "1.0")),
+      minutes: Float(ENV.fetch("BENCH_RUSH_MINUTES", "10"))
+    )
+    path = Bench::Rush.write(report)
+    Bench::Rush.print_report(report)
+    puts
+    puts "wrote #{path}"
+  end
+
   desc "Load the benchmark dataset and time discovery"
   task run: :environment do
     Rake::Task["bench:prepare"].invoke

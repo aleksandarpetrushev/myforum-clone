@@ -416,7 +416,7 @@ module Bench
     end
 
     class Server
-      def self.start(database_url:, certs:)
+      def self.start(database_url:, certs:, extra_env: {})
         log = Rails.root.join("tmp/bench/puma.log")
         FileUtils.mkdir_p(log.dirname)
         pidfile = Rails.root.join("tmp/bench/puma.pid")
@@ -437,7 +437,7 @@ module Bench
           "BENCH_SSL_CERT" => certs.fetch(:cert),
           "BUNDLE_PATH" => nil,
           "BUNDLE_USER_HOME" => nil
-        }
+        }.merge(extra_env)
         pid = Process.spawn(
           env,
           "bundle", "exec", "puma", "-C", "config/puma_traffic.rb",
