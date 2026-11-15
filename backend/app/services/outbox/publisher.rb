@@ -3,17 +3,22 @@ module Outbox
   # (attempts, next_attempt_at), and the pass carries on with other rows, so one consumer being down never stops
   # notifications and analytics for everyone (MF-204). Later rows with the failed row's ordering key wait behind it.
   #
+  # A pass reads at most BATCH_SIZE rows; full_batch? tells ProcessOutboxJob more may be waiting, so it goes again
+  # at once instead of idling (MF-302: the programme rush books 60-80 seats a second at its peak).
+  #
   # Known limit: the pass reads the oldest BATCH_SIZE pending rows. If all of them wait behind failing rows, newer
   # rows wait too until the failures clear; Metrics.outbox_stall_seconds shows it.
   class Publisher
-    BATCH_SIZE = 100
+    BATCH_SIZE = 500
     MAX_BACKOFF = 5.minutes
 
     def call(now: Time.current)
       published = 0
       waiting_keys = Set.new
+      rows = OutboxEvent.pending.order(:id).limit(BATCH_SIZE).to_a
+      @full_batch = rows.size == BATCH_SIZE
 
-      OutboxEvent.pending.order(:id).limit(BATCH_SIZE).each do |event|
+      rows.each do |event|
         key = event.ordering_key
         next if waiting_keys.include?(key)
 
@@ -31,6 +36,11 @@ module Outbox
       end
 
       published
+    end
+
+    # true when the last pass read a whole batch, so more rows may be pending.
+    def full_batch?
+      @full_batch == true
     end
 
     def self.backoff(attempts)

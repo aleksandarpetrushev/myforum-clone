@@ -31,7 +31,7 @@ sequenceDiagram
   Reg->>Redis: after commit: delete event detail, bump list epoch
   API-->>Client: 201 registration
 
-  loop every 1–5 s
+  loop at once after a full batch, else every 1–5 s
     Poll->>DB: pending rows, oldest first, lock each row
     Poll->>Redis: enqueue SendNotificationJob, RecordAnalyticsJob
     Poll->>Go: POST /internal/events
@@ -60,7 +60,7 @@ Outbox idempotency keys include `lifecycle_version`, so a later create or cancel
 
 Duplicate registration returns 409 `duplicate_registration`. A full event returns 409 `event_full`. There is no payment step. New registrations are stored as `confirmed`. `failed` remains on the column and cannot be cancelled or reopened.
 
-`ProcessOutboxJob` marks a row published only after dispatch returns. If dispatch raises, for example because the personalization service is down, the row stays pending with `attempts`, `last_error` and a `next_attempt_at` that backs off from 2 seconds to 5 minutes, and the pass carries on with other rows. Later rows with the same ordering key (the same event, or the same user's topic follows) wait behind it, so they still arrive in order (MF-204). Notification and analytics inserts ignore a repeated idempotency key. The Go service does the same with `processed_events`.
+`ProcessOutboxJob` marks a row published only after dispatch returns. If dispatch raises, for example because the personalization service is down, the row stays pending with `attempts`, `last_error` and a `next_attempt_at` that backs off from 2 seconds to 5 minutes, and the pass carries on with other rows. Later rows with the same ordering key (the same event, or the same user's topic follows) wait behind it, so they still arrive in order (MF-204). A pass reads up to 500 pending rows. When it published a full batch, the next pass starts at once; otherwise the job waits 1 second, or 5 seconds when nothing was published, so rows stuck behind failures never make it spin (MF-302). Notification and analytics inserts ignore a repeated idempotency key. The Go service does the same with `processed_events`.
 
 ## Organizer cancellation
 
